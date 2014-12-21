@@ -1,0 +1,462 @@
+#!/usr/bin/env python3
+
+from xml.etree import ElementTree
+from xml.etree.ElementTree import Element, SubElement
+from xml.dom import minidom
+from collections import OrderedDict
+import sys, argparse, os, glob, time, pprint, datetime, hashlib, subprocess, io, tarfile, fnmatch, re
+
+def readFromBackup(fName):
+    
+    print("Extracting "+fName)
+    retString=bytes()
+
+    shellCmd = "zbackup restore "+fName+' | cat'
+
+    proc = subprocess.Popen(shellCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+    retString+=proc.stdout.read()    
+
+    proc.wait()    
+    
+    return retString         
+                
+def createZBackup(fName, data):    
+    
+    proc = subprocess.Popen(["zbackup", "backup", fName], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc.stdin.write(data)
+            
+    proc.communicate()            
+    proc.wait()
+        
+def readXMLManifestFC(fName):
+    
+    mDict={}
+    
+    data=readFromBackup(fName)
+                
+    tree = ElementTree.fromstring(data)
+    
+    for node in tree.iter('fDesc'):
+    
+        key=node.find('name').text            
+        mDict[key]=[getETFromStr(node.find('modOn').text), getETFromStr(node.find('backupOn').text), int(node.find('size').text), node.find('path').text, 0]            
+    
+    return mDict    
+
+def getListOfIncludes(includes):
+
+	iList=[]
+
+	for x in includes:
+		iList.append(fnmatch.translate(x)[:-7])
+
+	return iList
+
+def shouldInclude(string, pList):
+
+	for pattern in pList:
+		if re.search(pattern, string)!=None:
+			return True
+
+	return False
+                                                
+def readXMLManifestFR(fName, includes):
+
+	mDict={}
+	iList=getListOfIncludes(includes)
+
+	data=readFromBackup(fName)
+	            
+	tree = ElementTree.fromstring(data)        
+	bRootDir = tree.find('bDir').text
+
+	for node in tree.iter('fDesc'):
+
+		name=node.find('name').text
+
+		if not shouldInclude(name, iList):
+			continue
+
+		key=node.find('path').text
+
+		if not mDict.__contains__(key):
+			mDict[key]=set()
+
+		mDict[key].add(name)				
+	    
+	return mDict
+                        
+def handleNewFileName(pArgs, mDict, x, tar, iPath):
+    
+    if(mDict.__contains__(x[0])):
+        mDict[x[0]][4]=1
+            
+    if (not mDict.__contains__(x[0])) or mDict[x[0]][0]<x[2]:
+        
+        if not mDict.__contains__(x[0]):
+            val=2
+        else:        
+            val=3        
+        
+        if iPath:
+            mDict[x[0]]=[x[2], int(time.time()), os.path.getsize(x[1]), os.path.relpath(os.path.realpath(pArgs.nBackup), iPath), val]                    
+        else:
+            mDict[x[0]]=[x[2], int(time.time()), os.path.getsize(x[1]), os.path.realpath(pArgs.nBackup), val]            
+        
+        tar.add(x[1], arcname=x[0])
+                     
+    elif pArgs.mAge: 
+         
+        if shouldBack(pArgs.mAge*3600, pArgs.mAJitter*3600, x[0], mDict[x[0]][1]):
+
+            print("Into refreshment")
+            
+            mDict[x[0]][1]=int(time.time())
+            tar.add(x[1], arcname=x[0]) 
+            mDict[x[0]][4]=4                    
+            
+            if iPath:
+                mDict[x[0]][3]=os.path.relpath(os.path.realpath(pArgs.nBackup), iPath)
+            else:
+                mDict[x[0]][3]=os.path.realpath(pArgs.nBackup)                    
+                
+def handleBackupCreation(pArgs):  
+    
+    if not hBCreationChecks(pArgs):
+        return -1
+    
+    iPath=getInfoPath(os.path.dirname(os.path.realpath(pArgs.nBackup)))
+        
+    rSet=set()
+    
+    if pArgs.pBackup:
+                
+        try:
+            mDict=readXMLManifestFC(pArgs.pBackup+'.manifest')
+                                    
+        except subprocess.CalledProcessError as e:                    
+            return e.returncode                    
+            
+    else:
+        mDict={}       
+    
+    if pArgs.excludes:
+    
+        for gPattern in pArgs.excludes:
+            for item in glob.glob(os.path.join(pArgs.dPath, gPattern)):
+                rSet.add(os.path.realpath(item))
+                        
+    stream=io.BytesIO()
+    
+    with tarfile.open(mode="w|", fileobj=stream) as tar:    
+                                       
+        for dirName, subDirList, fileList in os.walk(pArgs.dPath):            
+            for fName in fileList:   
+                     
+                tPath=os.path.join(dirName, fName)
+                rPath=os.path.relpath(tPath, pArgs.dPath)
+
+                print(rPath)
+                print(tPath)
+                
+                if not shouldExclude(tPath, rSet):                                                                                 
+                    handleNewFileName(pArgs, mDict, [rPath, tPath, int(os.path.getmtime(tPath))], tar, iPath)                    
+                    
+                elif mDict.__contains__(rPath):
+                    mDict.pop(rPath)
+                    
+        tar.close()
+        stream.flush()
+                    
+    print(iPath)            
+    print(rSet)                
+    print(mDict)
+    
+    data = stream.getvalue()
+    stream.close()
+    
+    try:
+            
+        createZBackup(pArgs.nBackup, data)                                    
+        createZBackup(pArgs.nBackup+'.manifest', bytes(getXmlManifestFromDict(mDict, pArgs.dPath), 'UTF-8'))            
+                                                                
+        return 0        
+        
+    except subprocess.CalledProcessError as e:                    
+        return e.returncode            
+        
+def getFiles(tar, v):
+    
+    tInfo=[]
+
+    for tMember in tar.getmembers():
+    	if tMember.name in v:
+          tInfo.append(tMember)
+    
+    return tInfo
+    
+def handleBackupRestoration(pArgs):
+    
+    print(pArgs)
+
+    if not hBRestorationChecks(pArgs):
+        return -1
+    
+    iPath = getInfoPath(pArgs.backup)
+    
+    try:
+        
+        mDict=readXMLManifestFR(pArgs.backup+'.manifest', pArgs.includes)
+    
+    except subprocess.CalledProcessError as e:                    
+        return e.returncode 
+    
+    print(iPath)
+    print(mDict)  
+    
+    for k, v in mDict.items():
+            
+        print(k)
+        print(v)
+                
+        try:
+
+            stream=io.BytesIO(readFromBackup(os.path.join(iPath, k)))
+                                    
+            tar=tarfile.open(mode="r:", fileobj=stream)                        
+            tar.extractall(path=".", members=getFiles(tar, v))
+                                                        
+        except subprocess.CalledProcessError as e:                    
+            return e.returncode
+        
+        finally:                        
+            stream.close() 
+        
+    return 0  
+
+def getXmlManifestFromDict(mDict, rDir):     
+        
+    sDict=OrderedDict(sorted(mDict.items()))
+
+    top = Element('info')
+    
+    dChild = SubElement(top, 'bDir')
+    dChild.text=os.path.basename(os.path.realpath(rDir))+"/"        
+
+    for k, v in sDict.items():
+        
+        if v[4]>0:
+                                
+            child = SubElement(top, 'fDesc')
+            
+            nChild = SubElement(child, 'name')
+            nChild.text = k
+            
+            sChild = SubElement(child, 'size')
+            sChild.text = str(v[2])
+            
+            moChild = SubElement(child, 'modOn')
+            moChild.text = datetime.datetime.fromtimestamp(v[0]).strftime('%Y-%m-%dT%H:%M:%S')
+            
+            boChild = SubElement(child, 'backupOn')
+            boChild.text = datetime.datetime.fromtimestamp(v[1]).strftime('%Y-%m-%dT%H:%M:%S') 
+            
+            fPChild = SubElement(child, 'path')
+            fPChild.text = v[3]
+            
+            printInfo(v[4], k)                    
+          
+    return prettify(top)                       
+
+def shouldExclude(tPath, rSet):
+    
+    tPath=os.path.realpath(tPath)
+    
+    for x in rSet:
+        
+        if tPath.startswith(x):
+            return True
+        
+    return False
+
+def getInfoPath(pPath):
+        
+    if os.path.isfile(os.path.join(pPath, "info")):
+        return pPath
+    
+    elif os.path.dirname(pPath)!=pPath:
+        return getInfoPath(os.path.dirname(pPath))
+    
+    else:
+        return ""
+            
+def prettify(elem):
+    
+    rString = ElementTree.tostring(elem, 'UTF-8')
+    rParsed = minidom.parseString(rString)
+    
+    return str(rParsed.toprettyxml(indent="  "))
+
+def printInfo(index, fName):
+    
+    if index==2:
+        print(fName+"\tSTORED")
+        
+    elif index==3:
+        print(fName+"\tUPDATED")
+        
+    elif index==4:
+        print(fName+"\tREFRESHED")
+        
+def getETFromStr(dStr):
+    
+    pattern = '%Y-%m-%dT%H:%M:%S'
+    return int(time.mktime(time.strptime(dStr, pattern)))
+
+def getRJitter(fName, mAJitter):
+            
+    return (int(hashlib.sha1(fName.encode('UTF-8')).hexdigest(), 16 ) % (2*mAJitter)) - mAJitter
+    
+def shouldBack(mAge, mAJitter, fName, lBTime):
+        
+    pTime=int(time.time())
+                            
+    mASeconds=mAge+getRJitter(fName, int(mAJitter))
+
+    print("Comparing mAS "+str(mASeconds)+" and "+str(pTime-lBTime))
+    
+    if (pTime-lBTime)>mASeconds:
+        return True
+    
+    return False                                    
+    
+def hBCreationChecks(pArgs):
+        
+    if not os.path.isfile(pArgs.pBackup):
+        
+        if (not pArgs.pBackup==''):                    
+            print('The previous backup file does not exist')
+            return False
+    
+    else:        
+    
+        if not os.path.isfile(pArgs.pBackup+'.manifest'):
+            print('The manifest associated with previous backup file does not exist')
+            return False        
+    
+    if not os.path.isdir(pArgs.dPath):
+        print('The directory from which files need to be backed up does not exist')
+        return False                                        
+    
+    fName, fExtension = os.path.splitext(pArgs.nBackup)
+        
+    if(fExtension!='.tar'):        
+        print('The file extension of the new backup should be \'tar\'')
+        return False 
+    
+    if (pArgs.mAge and (not pArgs.mAJitter)) or ((not pArgs.mAge) and pArgs.mAJitter):
+        print('The --maxAgeJitter argument should be used in conjunction with --maxAge')
+        return False
+    
+    return True      
+    
+def hBRestorationChecks(pArgs):
+        
+    if not os.path.isfile(pArgs.backup):    
+        print('The previous backup file does not exist')
+        return False    
+    
+    if not os.path.isfile(pArgs.backup+'.manifest'):
+        print('The manifest associated with previous backup file does not exist')
+        return False            
+            
+    return True
+
+def getCreateArgsParser():
+        
+    parser = argparse.ArgumentParser(description='ZBackupTar backup creation')
+    
+    parser.add_argument('create', help='Option used to create a new zBackup' )         
+        
+    parser.add_argument('--previousBackup', dest='pBackup', metavar='FILEPATH', 
+        help='Path of the previous backup', required=True)
+    
+    parser.add_argument('--newBackup', dest='nBackup', metavar='FILEPATH', 
+        help='Path of the new backup', required=True)        
+    
+    parser.add_argument('--zbackupArgs', dest='aFlags', metavar='AF', nargs='*',
+        help='Additional flags to create a new backup')    
+    
+    parser.add_argument('--exclude', dest='excludes', action='append', metavar='EFiles',  
+        help='Files to be excluded from the backup')
+    
+    parser.add_argument('--maxAge', dest='mAge', metavar='MAXAGE', type=float,
+        help='Refresh any file older than this in the manifest')   
+    
+    parser.add_argument('--maxAgeJitter', dest='mAJitter', metavar='AGEJITTER', type=float, 
+        help='Jitter bound to be used in conjunction with maxAge')
+    
+    parser.add_argument('dPath', metavar='DIRPATH', type=str,
+        help='Path of the directory with the files to be backed up' )     
+    
+    return parser
+
+def getRestoreArgsParser():
+    
+    parser = argparse.ArgumentParser(description='ZBackupTar backup restoration')
+    
+    parser.add_argument('restore', default='restore',
+        help='Option used to restore a zBackup' )        
+            
+    parser.add_argument('--backup', dest='backup', metavar='FILEPATH', 
+        help='Path of the backup file to be restored', required=True)            
+    
+    parser.add_argument('--zbackupArgs', dest='aFlags', metavar='AF', type=str, nargs='*',
+        help='Additional flags to create a new backup')
+    
+    parser.add_argument('includes', metavar='IFiles', nargs='+', 
+    	help='Restore the file structure from DIRPATH onwards using the backups')                                      
+    
+    return parser
+
+def main():  
+    
+    cParser=getCreateArgsParser()
+    rParser=getRestoreArgsParser()
+                    
+    if len(sys.argv)>1:
+    
+        if sys.argv[1]=='create':
+            
+            retCode=handleBackupCreation(cParser.parse_args())
+                        
+            if retCode!=0:
+                raise Exception(retCode)
+            
+        elif sys.argv[1]=='restore':
+            
+            if(len(sys.argv)==4):
+            	sys.argv.append('*')
+
+            handleBackupRestoration(rParser.parse_known_args()[0])
+            
+        elif sys.argv[1]=='-h' or sys.argv[1]=='--help':
+            
+            cParser.print_help()
+            rParser.print_help()            
+            
+        else:
+            print('Invalid ZBackup-tar operation. Please use\n')            
+            cParser.print_usage()
+            rParser.print_usage()                        
+            
+    else:
+        print('ZBackup-tar operation not specified. Please use\n')
+        cParser.print_help()
+        rParser.print_help()
+            
+    
+if __name__ == "__main__":
+    
+    main()        
