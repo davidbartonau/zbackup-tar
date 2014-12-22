@@ -4,7 +4,7 @@ from xml.etree import ElementTree
 from xml.etree.ElementTree import Element, SubElement
 from xml.dom import minidom
 from collections import OrderedDict
-import sys, argparse, os, glob, time, pprint, datetime, hashlib, subprocess, io, tarfile, fnmatch, re
+import sys, argparse, os, time, pprint, datetime, hashlib, subprocess, io, tarfile, fnmatch, re
 
 def readFromBackup(fName):
     
@@ -44,16 +44,16 @@ def readXMLManifestFC(fName):
     
     return mDict    
 
-def getListOfIncludes(includes):
+def generatePatterns(fnPatterns):
 
-	iList=[]
+	pList=[]
 
-	for x in includes:
-		iList.append(fnmatch.translate(x)[:-7])
+	for x in fnPatterns:
+		pList.append(fnmatch.translate(x)[:-7])
 
-	return iList
+	return pList
 
-def shouldInclude(string, pList):
+def matchPatterns(string, pList):
 
 	for pattern in pList:
 		if re.search(pattern, string)!=None:
@@ -64,7 +64,7 @@ def shouldInclude(string, pList):
 def readXMLManifestFR(fName, includes):
 
 	mDict={}
-	iList=getListOfIncludes(includes)
+	iList=generatePatterns(includes)
 
 	data=readFromBackup(fName)
 	            
@@ -75,7 +75,7 @@ def readXMLManifestFR(fName, includes):
 
 		name=node.find('name').text
 
-		if not shouldInclude(name, iList):
+		if not matchPatterns(name, iList):
 			continue
 
 		key=node.find('path').text
@@ -119,16 +119,14 @@ def handleNewFileName(pArgs, mDict, x, tar, iPath):
             if iPath:
                 mDict[x[0]][3]=os.path.relpath(os.path.realpath(pArgs.nBackup), iPath)
             else:
-                mDict[x[0]][3]=os.path.realpath(pArgs.nBackup)                    
+                mDict[x[0]][3]=os.path.realpath(pArgs.nBackup)                         
                 
 def handleBackupCreation(pArgs):  
     
     if not hBCreationChecks(pArgs):
         return -1
     
-    iPath=getInfoPath(os.path.dirname(os.path.realpath(pArgs.nBackup)))
-        
-    rSet=set()
+    iPath=getInfoPath(os.path.dirname(os.path.realpath(pArgs.nBackup)))       
     
     if pArgs.pBackup:
                 
@@ -139,20 +137,22 @@ def handleBackupCreation(pArgs):
             return e.returncode                    
             
     else:
-        mDict={}       
-    
-    if pArgs.excludes:
-    
-        for gPattern in pArgs.excludes:
-            for item in glob.glob(os.path.join(pArgs.dPath, gPattern)):
-                rSet.add(os.path.realpath(item))
-                        
+        mDict={}
+
     stream=io.BytesIO()
-    
+
+    excludes=[]
+
+    if pArgs.excludes:
+        excludes=generatePatterns(pArgs.excludes)
+
     with tarfile.open(mode="w|", fileobj=stream) as tar:    
                                        
         for dirName, subDirList, fileList in os.walk(pArgs.dPath):            
             for fName in fileList:   
+
+            	if(os.path.islink(dirname)):
+            		break
                      
                 tPath=os.path.join(dirName, fName)
                 rPath=os.path.relpath(tPath, pArgs.dPath)
@@ -160,7 +160,7 @@ def handleBackupCreation(pArgs):
                 print(rPath)
                 print(tPath)
                 
-                if not shouldExclude(tPath, rSet):                                                                                 
+                if not matchPatterns(rPath, excludes):  
                     handleNewFileName(pArgs, mDict, [rPath, tPath, int(os.path.getmtime(tPath))], tar, iPath)                    
                     
                 elif mDict.__contains__(rPath):
@@ -169,8 +169,8 @@ def handleBackupCreation(pArgs):
         tar.close()
         stream.flush()
                     
-    print(iPath)            
-    print(rSet)                
+    print(iPath)                       
+    print(excludes)
     print(mDict)
     
     data = stream.getvalue()
@@ -268,17 +268,6 @@ def getXmlManifestFromDict(mDict, rDir):
             printInfo(v[4], k)                    
           
     return prettify(top)                       
-
-def shouldExclude(tPath, rSet):
-    
-    tPath=os.path.realpath(tPath)
-    
-    for x in rSet:
-        
-        if tPath.startswith(x):
-            return True
-        
-    return False
 
 def getInfoPath(pPath):
         
