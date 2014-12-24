@@ -46,46 +46,46 @@ def readXMLManifestFC(fName):
 
 def generatePatterns(fnPatterns):
 
-	pList=[]
+    pList=[]
 
-	for x in fnPatterns:
-		pList.append(fnmatch.translate(x)[:-7])
+    for x in fnPatterns:
+        pList.append(fnmatch.translate(x)[:-7])
 
-	return pList
+    return pList
 
 def matchPatterns(string, pList):
 
-	for pattern in pList:
-		if re.search(pattern, string)!=None:
-			return True
+    for pattern in pList:
+        if re.search(pattern, string)!=None:
+            return True
 
-	return False
+    return False
                                                 
 def readXMLManifestFR(fName, includes):
 
-	mDict={}
-	iList=generatePatterns(includes)
+    mDict={}
+    iList=generatePatterns(includes)
 
-	data=readFromBackup(fName)
+    data=readFromBackup(fName)
 	            
-	tree = ElementTree.fromstring(data)        
-	bRootDir = tree.find('bDir').text
+    tree = ElementTree.fromstring(data)        
+    bRootDir = tree.find('bDir').text
 
-	for node in tree.iter('fDesc'):
+    for node in tree.iter('fDesc'):
 
-		name=node.find('name').text
+        name=node.find('name').text
 
-		if not matchPatterns(name, iList):
-			continue
+        if not matchPatterns(name, iList):
+            continue
 
-		key=node.find('path').text
+        key=node.find('path').text
 
-		if not mDict.__contains__(key):
-			mDict[key]=set()
+        if not mDict.__contains__(key):
+            mDict[key]=set()
 
-		mDict[key].add(name)				
+        mDict[key].add(name)				
 	    
-	return mDict
+    return mDict
                         
 def handleNewFileName(pArgs, mDict, x, tar, iPath):
     
@@ -151,8 +151,8 @@ def handleBackupCreation(pArgs):
         for dirName, subDirList, fileList in os.walk(pArgs.dPath):            
             for fName in fileList:   
 
-            	if(os.path.islink(dirname)):
-            		break
+                if(os.path.islink(dirName)):
+                    break
                      
                 tPath=os.path.join(dirName, fName)
                 rPath=os.path.relpath(tPath, pArgs.dPath)
@@ -318,7 +318,7 @@ def shouldBack(mAge, mAJitter, fName, lBTime):
     if (pTime-lBTime)>mASeconds:
         return True
     
-    return False                                    
+    return False
     
 def hBCreationChecks(pArgs):
         
@@ -448,4 +448,4 @@ def main():
     
 if __name__ == "__main__":
     
-    main()        
+    main()
