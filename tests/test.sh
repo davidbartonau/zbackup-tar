@@ -282,7 +282,7 @@ function test10 ()
     zbackup restore $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
     echo Checking backup $BACKUP
-    diff -rq $TESTDATA/ $TMPDIR/restored/ > tee /tmp/backup$BACKUP.diff
+    diff -rq $TESTDATA/ $TMPDIR/restored/ > /tmp/backup$BACKUP.diff
 
     checkForFailure "FAIL txt files should be different" "SUCCESS backup $BACKUP is different"
 
