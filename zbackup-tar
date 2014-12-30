@@ -8,7 +8,6 @@ import sys, argparse, os, time, pprint, datetime, hashlib, subprocess, io, tarfi
 
 def readFromBackup(fName):
     
-    print("Extracting "+fName)
     retString=bytes()
 
     shellCmd = "zbackup restore "+fName+' | cat'
@@ -46,46 +45,46 @@ def readXMLManifestFC(fName):
 
 def generatePatterns(fnPatterns):
 
-	pList=[]
+    pList=[]
 
-	for x in fnPatterns:
-		pList.append(fnmatch.translate(x)[:-7])
+    for x in fnPatterns:
+        pList.append(fnmatch.translate(x)[:-7])
 
-	return pList
+    return pList
 
 def matchPatterns(string, pList):
 
-	for pattern in pList:
-		if re.search(pattern, string)!=None:
-			return True
+    for pattern in pList:
+        if re.search(pattern, string)!=None:
+            return True
 
-	return False
+    return False
                                                 
 def readXMLManifestFR(fName, includes):
 
-	mDict={}
-	iList=generatePatterns(includes)
+    mDict={}
+    iList=generatePatterns(includes)
 
-	data=readFromBackup(fName)
+    data=readFromBackup(fName)
 	            
-	tree = ElementTree.fromstring(data)        
-	bRootDir = tree.find('bDir').text
+    tree = ElementTree.fromstring(data)        
+    bRootDir = tree.find('bDir').text
 
-	for node in tree.iter('fDesc'):
+    for node in tree.iter('fDesc'):
 
-		name=node.find('name').text
+        name=node.find('name').text
 
-		if not matchPatterns(name, iList):
-			continue
+        if not matchPatterns(name, iList):
+            continue
 
-		key=node.find('path').text
+        key=node.find('path').text
 
-		if not mDict.__contains__(key):
-			mDict[key]=set()
+        if not mDict.__contains__(key):
+            mDict[key]=set()
 
-		mDict[key].add(name)				
+        mDict[key].add(name)				
 	    
-	return mDict
+    return mDict
                         
 def handleNewFileName(pArgs, mDict, x, tar, iPath):
     
@@ -109,8 +108,6 @@ def handleNewFileName(pArgs, mDict, x, tar, iPath):
     elif pArgs.mAge: 
          
         if shouldBack(pArgs.mAge*3600, pArgs.mAJitter*3600, x[0], mDict[x[0]][1]):
-
-            print("Into refreshment")
             
             mDict[x[0]][1]=int(time.time())
             tar.add(x[1], arcname=x[0]) 
@@ -151,14 +148,11 @@ def handleBackupCreation(pArgs):
         for dirName, subDirList, fileList in os.walk(pArgs.dPath):            
             for fName in fileList:   
 
-            	if(os.path.islink(dirname)):
-            		break
+                if(os.path.islink(dirName)):
+                    break
                      
                 tPath=os.path.join(dirName, fName)
                 rPath=os.path.relpath(tPath, pArgs.dPath)
-
-                print(rPath)
-                print(tPath)
                 
                 if not matchPatterns(rPath, excludes):  
                     handleNewFileName(pArgs, mDict, [rPath, tPath, int(os.path.getmtime(tPath))], tar, iPath)                    
@@ -168,11 +162,7 @@ def handleBackupCreation(pArgs):
                     
         tar.close()
         stream.flush()
-                    
-    print(iPath)                       
-    print(excludes)
-    print(mDict)
-    
+                        
     data = stream.getvalue()
     stream.close()
     
@@ -186,19 +176,18 @@ def handleBackupCreation(pArgs):
     except subprocess.CalledProcessError as e:                    
         return e.returncode            
         
-def getFiles(tar, v):
+def getFiles(tar, v, bFPath):
     
     tInfo=[]
 
     for tMember in tar.getmembers():
     	if tMember.name in v:
           tInfo.append(tMember)
+          print(tMember.name+"\tEXTRACTED from "+bFPath)
     
     return tInfo
     
-def handleBackupRestoration(pArgs):
-    
-    print(pArgs)
+def handleBackupRestoration(pArgs):   
 
     if not hBRestorationChecks(pArgs):
         return -1
@@ -210,22 +199,16 @@ def handleBackupRestoration(pArgs):
         mDict=readXMLManifestFR(pArgs.backup+'.manifest', pArgs.includes)
     
     except subprocess.CalledProcessError as e:                    
-        return e.returncode 
+        return e.returncode     
     
-    print(iPath)
-    print(mDict)  
-    
-    for k, v in mDict.items():
-            
-        print(k)
-        print(v)
+    for k, v in mDict.items():            
                 
         try:
 
             stream=io.BytesIO(readFromBackup(os.path.join(iPath, k)))
                                     
             tar=tarfile.open(mode="r:", fileobj=stream)                        
-            tar.extractall(path=".", members=getFiles(tar, v))
+            tar.extractall(path=".", members=getFiles(tar, v, k))
                                                         
         except subprocess.CalledProcessError as e:                    
             return e.returncode
@@ -312,13 +295,11 @@ def shouldBack(mAge, mAJitter, fName, lBTime):
     pTime=int(time.time())
                             
     mASeconds=mAge+getRJitter(fName, int(mAJitter))
-
-    print("Comparing mAS "+str(mASeconds)+" and "+str(pTime-lBTime))
     
     if (pTime-lBTime)>mASeconds:
         return True
     
-    return False                                    
+    return False
     
 def hBCreationChecks(pArgs):
         
@@ -448,4 +429,4 @@ def main():
     
 if __name__ == "__main__":
     
-    main()        
+    main()

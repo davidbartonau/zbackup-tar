@@ -259,7 +259,7 @@ function test9 ()
 
     diff -rq $TESTDATA/ $TMPDIR/restored/
 
-    checkForSuccess "SUCCESS After removing txt files, backup should be the same" "FAIL backup files were different" $TODO_BUG
+    checkForSuccess "SUCCESS After removing txt files, backup should be the same" "FAIL backup files were different"
 
     sleepAvoidCollision
 }
@@ -282,13 +282,13 @@ function test10 ()
     zbackup restore $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
     echo Checking backup $BACKUP
-    diff -rq $TESTDATA/ $TMPDIR/restored/ | tee /tmp/backup$BACKUP.diff
+    diff -rq $TESTDATA/ $TMPDIR/restored/ > /tmp/backup$BACKUP.diff
 
-    checkForFailure "FAIL txt files should be different" "SUCCESS backup $BACKUP is different" $TODO_BUG
+    checkForFailure "FAIL txt files should be different" "SUCCESS backup $BACKUP is different"
 
-    grep -v subfolder1/ /tmp/backup$BACKUP.diff
+    grep -v subfolder1 /tmp/backup$BACKUP.diff
 
-    checkForFailure "FAIL There should be no lines not matching subfolder1/" "SUCCESS backup is the same after excluding subfolder1/" $TODO_BUG
+    checkForFailure "FAIL There should be no lines not matching subfolder1/" "SUCCESS backup is the same after excluding subfolder1/"
 
     sleepAvoidCollision
 }
@@ -330,7 +330,7 @@ function test12 ()
 
     diff -w /tmp/backup$BACKUP.stdout $TESTDATA/../results/backup$BACKUP.stdout
 
-    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" $TODO_BUG
+    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" 
 
     sleepAvoidCollision
 }
@@ -355,9 +355,9 @@ function test13 ()
 
     # Sort the output of the command by filename, since the output is NOT sorted
     sort /tmp/backup$BACKUP.stdout | sed -e "s/backup[0-9][0-9].tar/backupNN.tar/g" > /tmp/backup$BACKUP.stdout.massaged
-    diff -w /tmp/backup$BACKUP.stdout $TESTDATA/../results/backup$BACKUP.stdout
+    diff -w /tmp/backup$BACKUP.stdout.massaged $TESTDATA/../results/backup$BACKUP.stdout
 
-    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" $TODO_BUG
+    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" 
 
     sleepAvoidCollision
 }
