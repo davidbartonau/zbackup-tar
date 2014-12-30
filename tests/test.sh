@@ -365,10 +365,10 @@ function test13 ()
 
 function test14 ()
 {
-    logResult "######## Test 14 - Partial restores ########"
+    logResult "######## Test 14 - Partial restores - directories ########"
     export BACKUP=14
 
-    backupAndRestoreDir backup13.tar backup14.tar
+    backupAndRestoreDir backup13.tar backup$BACKUP.tar
 
     cd $TMPDIR/restored/
     rm -rf $TMPDIR/restored/*
@@ -389,33 +389,53 @@ function test14 ()
 }
 
 
-
-
-
 function test15 ()
 {
-    logResult "######## Backup 15 - Sleep for 2 mins ########"
+    logResult "######## Test 15 - Partial restores - files ########"
+    export BACKUP=15
+
+    backupAndRestoreDir backup14.tar backup$BACKUP.tar
+
+    cd $TMPDIR/restored/
+    rm -rf $TMPDIR/restored/*
+    zbackup-tar restore --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar file.txt
+
+    find -type f | sort > /tmp/backup$BACKUP.list
+    diff -wB /tmp/backup$BACKUP.list $TESTDATA/../results/backup$BACKUP.list
+
+    checkForSuccess "SUCCESS - files are the same" "FAILURE files are different"
+
+    sleepAvoidCollision
+}
+
+
+
+
+
+function test16 ()
+{
+    logResult "######## Backup 16 - Sleep for 2 mins ########"
 
     longSleep 60 "To freshen files"
 
-    backupAndRestoreDir backup14.tar backup15.tar
+    backupAndRestoreDir backup15.tar backup16.tar
 
-    diff /tmp/backup14.tar.manifest /tmp/backup15.tar.manifest
+    diff /tmp/backup15.tar.manifest /tmp/backup16.tar.manifest
 
     checkForFailure "FAIL Manifests are identical, should have been reloaded" "SUCCESS Manifest has changed"
 }
 
 
 
-function test16 ()
+function test17 ()
 {
-    logResult "######## Backup 16 - Sleep for 1 mins ########"
+    logResult "######## Backup 17 - Sleep for 1 mins ########"
 
     longSleep 45 "To freshen files"
 
-    backupAndRestoreDir backup15.tar backup16.tar
+    backupAndRestoreDir backup16.tar backup17.tar
 
-    diff /tmp/backup15.tar.manifest /tmp/backup16.tar.manifest
+    diff /tmp/backup16.tar.manifest /tmp/backup17.tar.manifest
 
     checkForFailure "FAIL Manifests are identical, should have been reloaded" "SUCCESS Manifest has changed"
 
@@ -448,5 +468,6 @@ test13
 test14
 test15
 test16
+test17
 
 find $TESTDATA -name "*.txt" -print0 | xargs -0 rm -v
