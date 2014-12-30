@@ -81,7 +81,7 @@ function backupAndRestoreDir ()
     diff -rq $TESTDATA/ $TMPDIR/restored/
     checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME"
 
-    zbackup restore $TMPDIR/zbackup/backups/$BACKUPNAME.manifest > /tmp/$BACKUPNAME.manifest
+    zbackup restore --silent $TMPDIR/zbackup/backups/$BACKUPNAME.manifest > /tmp/$BACKUPNAME.manifest
 }
 
 
@@ -248,7 +248,7 @@ function test9 ()
     cd $TMPDIR/restored/
     zbackup-tar restore --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
 
-    zbackup restore $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
+    zbackup restore --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
     echo Checking backup $BACKUP
     diff -rq $TESTDATA/ $TMPDIR/restored/
@@ -279,7 +279,7 @@ function test10 ()
     cd $TMPDIR/restored/
     zbackup-tar restore --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
 
-    zbackup restore $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
+    zbackup restore --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
     echo Checking backup $BACKUP
     diff -rq $TESTDATA/ $TMPDIR/restored/ > /tmp/backup$BACKUP.diff
@@ -447,5 +447,6 @@ test12
 test13
 test14
 test15
+test16
 
 find $TESTDATA -name "*.txt" -print0 | xargs -0 rm -v
