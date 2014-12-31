@@ -29,16 +29,16 @@ function test1Encrypted ()
     zbackup init --password-file $TMPDIR/password $TMPDIR/zbackup_encrypted/
 
     zbackup-tar create --zbackupArgs "--password-file $TMPDIR/password" --previousBackup "" --newBackup $TMPDIR/zbackup_encrypted/backups/backup01.tar $TESTDATA/
-    checkForSuccess "SUCCESS $BACKUPNAME backed up" "FAIL zbackup-tar failed" $TODO_BUG
+    checkForSuccess "SUCCESS $BACKUPNAME backed up" "FAIL zbackup-tar failed"
 
     cd $TMPDIR/restored/
     rm -rf $TMPDIR/restored/*
 
     zbackup-tar restore --zbackupArgs "--password-file $TMPDIR/password" --backup $TMPDIR/zbackup_encrypted/backups/backup01.tar
-    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed" $TODO_BUG
+    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed"
 
     diff -rq $TESTDATA/ $TMPDIR/restored/
-    checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME" $TODO_BUG
+    checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME"
 }
 
 
@@ -387,7 +387,6 @@ rm -rf $TMPDIR
 mkdir -pv $TMPDIR/zbackup $TMPDIR/restored
 
 zbackup init --non-encrypted $TMPDIR/zbackup/
-
 
 test1
 test1Encrypted

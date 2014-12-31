@@ -25,11 +25,14 @@ from xml.dom import minidom
 from collections import OrderedDict
 import sys, argparse, os, time, pprint, datetime, hashlib, subprocess, io, tarfile, fnmatch, re
 
-def readFromBackup(fName):
+def readFromBackup(fName, aFlags):
     
     retString=bytes()
 
-    shellCmd = "zbackup restore "+fName+' | cat'
+    if(aFlags):
+        shellCmd = "zbackup restore "+fName+' '+' '.join(aFlags)+' | cat'
+    else:
+        shellCmd = "zbackup restore "+fName+' | cat'	    	
 
     proc = subprocess.Popen(shellCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
@@ -39,19 +42,24 @@ def readFromBackup(fName):
     
     return retString         
                 
-def createZBackup(fName, data):    
-    
-    proc = subprocess.Popen(["zbackup", "backup", fName], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def createZBackup(fName, data, aFlags):    
+	    
+    if(aFlags):
+        cCmd = "zbackup backup "+fName+" "+' '.join(aFlags)
+        proc = subprocess.Popen(cCmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        proc = subprocess.Popen(["zbackup", "backup", fName], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)	    	
+
     proc.stdin.write(data)
             
     proc.communicate()            
     proc.wait()
         
-def readXMLManifestFC(fName):
+def readXMLManifestFC(fName, aFlags):
     
     mDict={}
     
-    data=readFromBackup(fName)
+    data=readFromBackup(fName, aFlags)
                 
     tree = ElementTree.fromstring(data)
     
@@ -79,12 +87,12 @@ def matchPatterns(string, pList):
 
     return False
                                                 
-def readXMLManifestFR(fName, includes):
+def readXMLManifestFR(fName, includes, aFlags):
 
     mDict={}
     iList=generatePatterns(includes)
 
-    data=readFromBackup(fName)
+    data=readFromBackup(fName, aFlags)
 	            
     tree = ElementTree.fromstring(data)        
     bRootDir = tree.find('bDir').text
@@ -147,7 +155,7 @@ def handleBackupCreation(pArgs):
     if pArgs.pBackup:
                 
         try:
-            mDict=readXMLManifestFC(pArgs.pBackup+'.manifest')
+            mDict=readXMLManifestFC(pArgs.pBackup+'.manifest', pArgs.aFlags)
                                     
         except subprocess.CalledProcessError as e:                    
             return e.returncode                    
@@ -166,11 +174,12 @@ def handleBackupCreation(pArgs):
                                        
         for dirName, subDirList, fileList in os.walk(pArgs.dPath):            
             for fName in fileList:   
-
-                if(os.path.islink(dirName)):
-                    break
                      
                 tPath=os.path.join(dirName, fName)
+                
+                if os.path.islink(tPath):	                        
+                    break
+
                 rPath=os.path.relpath(tPath, pArgs.dPath)
                 
                 if not matchPatterns(rPath, excludes):  
@@ -187,8 +196,8 @@ def handleBackupCreation(pArgs):
     
     try:
             
-        createZBackup(pArgs.nBackup, data)                                    
-        createZBackup(pArgs.nBackup+'.manifest', bytes(getXmlManifestFromDict(mDict, pArgs.dPath), 'UTF-8'))            
+        createZBackup(pArgs.nBackup, data, pArgs.aFlags)                                    
+        createZBackup(pArgs.nBackup+'.manifest', bytes(getXmlManifestFromDict(mDict, pArgs.dPath), 'UTF-8'), pArgs.aFlags)            
                                                                 
         return 0        
         
@@ -215,7 +224,7 @@ def handleBackupRestoration(pArgs):
     
     try:
         
-        mDict=readXMLManifestFR(pArgs.backup+'.manifest', pArgs.includes)
+        mDict=readXMLManifestFR(pArgs.backup+'.manifest', pArgs.includes, pArgs.aFlags)
     
     except subprocess.CalledProcessError as e:                    
         return e.returncode     
@@ -224,7 +233,7 @@ def handleBackupRestoration(pArgs):
                 
         try:
 
-            stream=io.BytesIO(readFromBackup(os.path.join(iPath, k)))
+            stream=io.BytesIO(readFromBackup(os.path.join(iPath, k), pArgs.aFlags))
                                     
             tar=tarfile.open(mode="r:", fileobj=stream)                        
             tar.extractall(path=".", members=getFiles(tar, v, k))
@@ -425,10 +434,16 @@ def main():
             
         elif sys.argv[1]=='restore':
             
-            if(len(sys.argv)==4):
-            	sys.argv.append('*')
+            sys.argv.append('*')
+            pArgs=rParser.parse_known_args()[0]
 
-            handleBackupRestoration(rParser.parse_known_args()[0])
+            if len(pArgs.includes)>1:
+                del pArgs.includes[-1]        		
+
+            retCode=handleBackupRestoration(pArgs)
+
+            if retCode!=0:
+                raise Exception(retCode)            
             
         elif sys.argv[1]=='-h' or sys.argv[1]=='--help':
             
