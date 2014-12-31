@@ -59,6 +59,7 @@ function backupAndRestoreDir ()
 {
     PREVNAME=$1
     BACKUPNAME=$2
+    LOCAL_TODO_BUG=$3
 
     if [ -z "$PREVNAME" ]; then
         PREVBACKUP=""
@@ -68,6 +69,7 @@ function backupAndRestoreDir ()
     
     echo PREVBACKUP $PREVBACKUP NEWBACKUP $TMPDIR/zbackup/backups/$BACKUPNAME
     zbackup-tar create --previousBackup "$PREVBACKUP" --newBackup $TMPDIR/zbackup/backups/$BACKUPNAME --maxAge 0.03 --maxAgeJitter 0.02 $TESTDATA/
+    checkForSuccess "SUCCESS $BACKUPNAME backed up" "FAIL zbackup-tar failed" $LOCAL_TODO_BUG
 
     echo Restore $BACKUPNAME
 
@@ -75,11 +77,12 @@ function backupAndRestoreDir ()
     rm -rf $TMPDIR/restored/*
 
     zbackup-tar restore --backup $TMPDIR/zbackup/backups/$BACKUPNAME
+    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed" $LOCAL_TODO_BUG
 
     echo Checking $BACKUPNAME
 
     diff -rq $TESTDATA/ $TMPDIR/restored/
-    checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME"
+    checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME" $LOCAL_TODO_BUG
 
     zbackup restore --silent $TMPDIR/zbackup/backups/$BACKUPNAME.manifest > /tmp/$BACKUPNAME.manifest
 }
@@ -109,7 +112,7 @@ function longSleep ()
 
 function sleepAvoidCollision ()
 {
-    SLEEP_PERIOD=5
+    SLEEP_PERIOD=3
 
     echo -n "Sleeping for $SLEEP_PERIOD seconds so we don't get date collisions "
     for i in `seq 1 $SLEEP_PERIOD`; do
@@ -127,6 +130,29 @@ function test1 ()
     backupAndRestoreDir "" backup01.tar
     sleepAvoidCollision
 }
+
+
+
+function test1Encrypted ()
+{
+    logResult "######## Backup 1 Encrypted - Encrypted backups ########"
+    echo mypassword > $TMPDIR/password
+
+    zbackup init --password-file $TMPDIR/password $TMPDIR/zbackup_encrypted/
+
+    zbackup-tar create --zbackupArgs "--password-file $TMPDIR/password" --previousBackup "" --newBackup $TMPDIR/zbackup_encrypted/backups/backup01.tar $TESTDATA/
+    checkForSuccess "SUCCESS $BACKUPNAME backed up" "FAIL zbackup-tar failed" $TODO_BUG
+
+    cd $TMPDIR/restored/
+    rm -rf $TMPDIR/restored/*
+
+    zbackup-tar restore --zbackupArgs "--password-file $TMPDIR/password" --backup $TMPDIR/zbackup_encrypted/backups/backup01.tar
+    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed" $TODO_BUG
+
+    diff -rq $TESTDATA/ $TMPDIR/restored/
+    checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME" $TODO_BUG
+}
+
 
 
 function test2 ()
@@ -410,32 +436,37 @@ function test15 ()
 
 
 
-
-
 function test16 ()
 {
-    logResult "######## Backup 16 - Sleep for 2 mins ########"
+    logResult "######## Test 16 - links (broken and working) ########"
+    export BACKUP=16
 
-    longSleep 60 "To freshen files"
+    ln -sT /dev/broken $TESTDATA/broken.link
+    ln -sT /etc/init.d $TESTDATA/initd.link
 
-    backupAndRestoreDir backup15.tar backup16.tar
+    backupAndRestoreDir backup15.tar backup$BACKUP.tar $TODO_BUG
 
-    diff /tmp/backup15.tar.manifest /tmp/backup16.tar.manifest
-
-    checkForFailure "FAIL Manifests are identical, should have been reloaded" "SUCCESS Manifest has changed"
+    find $TESTDATA -name "*.link" -print0 | xargs -0 rm -v
+    sleepAvoidCollision
 }
 
 
 
-function test17 ()
+
+
+
+function testSleep ()
 {
-    logResult "######## Backup 17 - Sleep for 1 mins ########"
+    PREVBACKUP=$1
+    BACKUP=$2
 
-    longSleep 45 "To freshen files"
+    logResult "######## Backup $BACKUP / $PREVBACKUP - Sleep for 1 mins ########"
 
-    backupAndRestoreDir backup16.tar backup17.tar
+    longSleep 60 "To freshen files"
 
-    diff /tmp/backup16.tar.manifest /tmp/backup17.tar.manifest
+    backupAndRestoreDir backup$PREVBACKUP.tar backup$BACKUP.tar
+
+    diff /tmp/backup$PREVBACKUP.tar.manifest /tmp/backup$BACKUP.tar.manifest
 
     checkForFailure "FAIL Manifests are identical, should have been reloaded" "SUCCESS Manifest has changed"
 
@@ -445,6 +476,8 @@ function test17 ()
 
 
 find $TESTDATA -name "*.txt" -print0 | xargs -0 rm -v
+find $TESTDATA -name "*.link" -print0 | xargs -0 rm -v
+
 chmod --reference=/tmp/zbackup-tar/zbackup/bundles /tmp/zbackup-tar/zbackup/index/
 rm -rf $TMPDIR
 mkdir -pv $TMPDIR/zbackup $TMPDIR/restored
@@ -453,6 +486,7 @@ zbackup init --non-encrypted $TMPDIR/zbackup/
 
 
 test1
+test1Encrypted
 test2
 test3
 test4
@@ -468,6 +502,16 @@ test13
 test14
 test15
 test16
-test17
+LASTTEST=16
+
+for i in `seq 1 3`; do
+    PREVBACKUP=$((LASTTEST + i - 1))
+    BACKUP=$((LASTTEST + i))
+
+    testSleep $PREVBACKUP $BACKUP
+done;
+
+
 
 find $TESTDATA -name "*.txt" -print0 | xargs -0 rm -v
+
