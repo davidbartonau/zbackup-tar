@@ -10,118 +10,7 @@ TMPDIR=/tmp/zbackup-tar/
 TESTDATA=$1
 TODO_BUG=1
 
-
-logResult()
-{
-    echo "[UNIT TEST] $1"
-}
-
-
-logFailResult()
-{
-    echo "[UNIT TEST] $1"  1>&2
-}
-
-
-checkForSuccess ()
-{
-   if [ "$?" -eq 0 ]; then
-        logResult "$1"
-    else
-        logFailResult "$2"
-
-        if [ -z "$3" ]; then
-            exit 1
-        else
-            logFailResult "KNOWN BUG - Supressing Failure"
-        fi
-    fi
-}
-
-
-checkForFailure ()
-{
-   if [ "$?" -eq 0 ]; then
-        logFailResult "$1"
-
-        if [ -z "$3" ]; then
-            exit 1
-        else
-            logFailResult "KNOWN BUG - Supressing Failure"
-        fi
-    else
-        logResult "$2"
-    fi
-}
-
-
-function backupAndRestoreDir ()
-{
-    PREVNAME=$1
-    BACKUPNAME=$2
-    LOCAL_TODO_BUG=$3
-
-    if [ -z "$PREVNAME" ]; then
-        PREVBACKUP=""
-    else
-        PREVBACKUP=$TMPDIR/zbackup/backups/$PREVNAME
-    fi
-    
-    echo PREVBACKUP $PREVBACKUP NEWBACKUP $TMPDIR/zbackup/backups/$BACKUPNAME
-    zbackup-tar create --previousBackup "$PREVBACKUP" --newBackup $TMPDIR/zbackup/backups/$BACKUPNAME --maxAge 0.03 --maxAgeJitter 0.02 $TESTDATA/
-    checkForSuccess "SUCCESS $BACKUPNAME backed up" "FAIL zbackup-tar failed" $LOCAL_TODO_BUG
-
-    echo Restore $BACKUPNAME
-
-    cd $TMPDIR/restored/
-    rm -rf $TMPDIR/restored/*
-
-    zbackup-tar restore --backup $TMPDIR/zbackup/backups/$BACKUPNAME
-    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed" $LOCAL_TODO_BUG
-
-    echo Checking $BACKUPNAME
-
-    diff -rq $TESTDATA/ $TMPDIR/restored/
-    checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME" $LOCAL_TODO_BUG
-
-    zbackup restore --silent $TMPDIR/zbackup/backups/$BACKUPNAME.manifest > /tmp/$BACKUPNAME.manifest
-}
-
-
-function longSleep ()
-{
-    SLEEP_PERIOD=$1
-    SLEEP_MESSAGE=$2
-
-    echo -n "Sleeping for $SLEEP_PERIOD $SLEEP_MESSAGE"
-
-    for i in `seq 1 $SLEEP_PERIOD`; do
-        sleep 1
-
-        if [ $((i % 5)) -eq 0 ]; then
-            echo -n $i
-        else
-            echo -n .
-        fi
-    done;
-
-    echo DONE
-}
-
-
-
-function sleepAvoidCollision ()
-{
-    SLEEP_PERIOD=3
-
-    echo -n "Sleeping for $SLEEP_PERIOD seconds so we don't get date collisions "
-    for i in `seq 1 $SLEEP_PERIOD`; do
-        sleep 1
-        echo -n .
-    done;
-
-    echo DONE
-}
+source $TESTDATA/../test_Functions.sh
 
 
 function test1 ()
@@ -130,7 +19,6 @@ function test1 ()
     backupAndRestoreDir "" backup01.tar
     sleepAvoidCollision
 }
-
 
 
 function test1Encrypted ()
@@ -202,11 +90,26 @@ function test5 ()
 
 
 
+function test5b ()
+{
+    logResult "######## Backup 5b - File permissions ########"
+
+    fakeroot -u $TESTDATA/../test_Fakeroot.sh $TESTDATA
+
+    diff /tmp/test5b.testdata.perms /tmp/test5b.restored.perms
+    checkForSuccess "SUCCESS Permissions match" "FAIL Permissions do not match" $TODO_BUG
+    
+
+    sleepAvoidCollision
+}
+
+
+
 function test6 ()
 {
     logResult "######## Test 6 - Moving the backup ########"
     export BACKUP=06
-    backupAndRestoreDir backup05.tar backup$BACKUP.tar
+    backupAndRestoreDir backup05b.tar backup$BACKUP.tar
 
     mkdir -pv $TMPDIR/foo/bar/
     mv $TMPDIR/zbackup $TMPDIR/foo/bar/
@@ -477,6 +380,7 @@ function testSleep ()
 
 find $TESTDATA -name "*.txt" -print0 | xargs -0 rm -v
 find $TESTDATA -name "*.link" -print0 | xargs -0 rm -v
+[ $TODO_BUG ] || mkdir -v $TESTDATA/empty
 
 chmod --reference=/tmp/zbackup-tar/zbackup/bundles /tmp/zbackup-tar/zbackup/index/
 rm -rf $TMPDIR
@@ -491,6 +395,7 @@ test2
 test3
 test4
 test5
+test5b
 test6
 test7
 test8
