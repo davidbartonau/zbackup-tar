@@ -259,7 +259,7 @@ function test12 ()
 
     diff -w /tmp/backup$BACKUP.stdout $TESTDATA/../results/backup$BACKUP.stdout
 
-    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" $TODO_BUG
+    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample"
 
     sleepAvoidCollision
 }
@@ -286,7 +286,7 @@ function test13 ()
     sort /tmp/backup$BACKUP.stdout | sed -e "s/backup[0-9][0-9].tar/backupNN.tar/g" > /tmp/backup$BACKUP.stdout.massaged
     diff -w /tmp/backup$BACKUP.stdout.massaged $TESTDATA/../results/backup$BACKUP.stdout
 
-    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" $TODO_BUG
+    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" 
 
     sleepAvoidCollision
 }
