@@ -25,6 +25,14 @@ from xml.dom import minidom
 from collections import OrderedDict
 import sys, argparse, os, time, pprint, datetime, hashlib, subprocess, io, tarfile, fnmatch, re
 
+dPath=""
+nBackup=""
+iPath=""
+excludes=[]
+mDict={}
+mAge=0
+mAJitter=0
+
 def readFromBackup(fName, aFlags):
     
     retString=bytes()
@@ -66,7 +74,7 @@ def readXMLManifestFC(fName, aFlags):
     for node in tree.iter('fDesc'):
     
         key=node.find('name').text            
-        mDict[key]=[getETFromStr(node.find('modOn').text), getETFromStr(node.find('backupOn').text), int(node.find('size').text), node.find('path').text, 0]            
+        mDict[key]=[getETFromStr(node.find('modOn').text), getETFromStr(node.find('backupOn').text), int(node.find('size').text), node.find('path').text, 0, int(node.find('uid').text), int(node.find('gid').text), int(node.find('isFile').text)]            
     
     return mDict    
 
@@ -90,12 +98,12 @@ def matchPatterns(string, pList):
 def readXMLManifestFR(fName, includes, aFlags):
 
     mDict={}
+    isFileMap={}
     iList=generatePatterns(includes)
 
     data=readFromBackup(fName, aFlags)
 	            
     tree = ElementTree.fromstring(data)        
-    bRootDir = tree.find('bDir').text
 
     for node in tree.iter('fDesc'):
 
@@ -109,48 +117,85 @@ def readXMLManifestFR(fName, includes, aFlags):
         if not mDict.__contains__(key):
             mDict[key]=set()
 
-        mDict[key].add(name)				
+        mDict[key].add(name)
+
+        isFileMap[name]=int(node.find('isFile').text)				
 	    
-    return mDict
-                        
-def handleNewFileName(pArgs, mDict, x, tar, iPath):
-    
-    if(mDict.__contains__(x[0])):
-        mDict[x[0]][4]=1
-            
-    if (not mDict.__contains__(x[0])) or mDict[x[0]][0]<x[2]:
+    return mDict, isFileMap
+
+def tCFilter(tInfo):
+
+	tInfo.name='/'+tInfo.name
+
+	rPath=os.path.relpath(tInfo.name, dPath)
+
+	if not matchPatterns(rPath, excludes):
+
+		if(tInfo.islnk() or tInfo.issym()):
+
+			if(os.path.exists(tInfo.linkname)):
+				return handleNewElement([rPath, int(os.path.getmtime(tInfo.name))], tInfo)
+
+			return None		
+
+		if(tInfo.isdir()):						
+			return handleNewElement([rPath, int(os.path.getmtime(tInfo.name))], tInfo)			
+
+		elif( tInfo.isfile() ):
+			return handleNewElement([rPath, int(os.path.getmtime(tInfo.name))], tInfo)			
+
+	elif mDict.__contains__(rPath):
+		mDict.pop(rPath)		
+
+def handleNewElement(info, tInfo):
+
+    if(mDict.__contains__(info[0])):
+        mDict[info[0]][4]=1
+
+    if (not mDict.__contains__(info[0])) or mDict[info[0]][0]<info[1] or mDict[info[0]][5]!=tInfo.uid or mDict[info[0]][6]!=tInfo.gid:
         
-        if not mDict.__contains__(x[0]):
+        if not mDict.__contains__(info[0]):
             val=2
         else:        
             val=3        
+
+        if(tInfo.isdir()):
+            mDict[info[0]]=[info[1], int(time.time()), tInfo.size, os.path.relpath(os.path.realpath(nBackup), iPath), val, tInfo.uid, tInfo.gid, 0]                    
+        else:    
+            mDict[info[0]]=[info[1], int(time.time()), tInfo.size, os.path.relpath(os.path.realpath(nBackup), iPath), val, tInfo.uid, tInfo.gid, 1]                            	
         
-        if iPath:
-            mDict[x[0]]=[x[2], int(time.time()), os.path.getsize(x[1]), os.path.relpath(os.path.realpath(pArgs.nBackup), iPath), val]                    
-        else:
-            mDict[x[0]]=[x[2], int(time.time()), os.path.getsize(x[1]), os.path.realpath(pArgs.nBackup), val]            
-        
-        tar.add(x[1], arcname=x[0])
-                     
-    elif pArgs.mAge: 
+        tInfo.name=info[0]
+        return tInfo
+
+    elif mAge: 
          
-        if shouldBack(pArgs.mAge*3600, pArgs.mAJitter*3600, x[0], mDict[x[0]][1]):
+        if shouldBack(mAge*3600, mAJitter*3600, info[0], mDict[info[0]][1]):
             
-            mDict[x[0]][1]=int(time.time())
-            tar.add(x[1], arcname=x[0]) 
-            mDict[x[0]][4]=4                    
-            
-            if iPath:
-                mDict[x[0]][3]=os.path.relpath(os.path.realpath(pArgs.nBackup), iPath)
-            else:
-                mDict[x[0]][3]=os.path.realpath(pArgs.nBackup)                         
-                
+            mDict[info[0]][1]=int(time.time())            
+            mDict[info[0]][3]=os.path.relpath(os.path.realpath(nBackup), iPath)            
+            mDict[info[0]][4]=4                               
+
+            tInfo.name=info[0]
+            return tInfo
+    
+    if(tInfo.isdir()):
+        return tInfo
+    else:    	
+        return None
+
 def handleBackupCreation(pArgs):  
+
+    global iPath, mDict, dPath, excludes, nBackup, mAge, mAJitter
     
     if not hBCreationChecks(pArgs):
         return -1
+       
+    dPath=pArgs.dPath        
     
-    iPath=getInfoPath(os.path.dirname(os.path.realpath(pArgs.nBackup)))       
+    iPath=getInfoPath(os.path.dirname(os.path.realpath(pArgs.nBackup)))  
+    nBackup=pArgs.nBackup
+    mAge=pArgs.mAge
+    mAJitter=pArgs.mAJitter     
     
     if pArgs.pBackup:
                 
@@ -171,23 +216,9 @@ def handleBackupCreation(pArgs):
         excludes=generatePatterns(pArgs.excludes)
 
     with tarfile.open(mode="w|", fileobj=stream) as tar:    
-                                       
-        for dirName, subDirList, fileList in os.walk(pArgs.dPath):            
-            for fName in fileList:   
-                     
-                tPath=os.path.join(dirName, fName)
-                
-                if os.path.islink(tPath):	                        
-                    break
 
-                rPath=os.path.relpath(tPath, pArgs.dPath)
-                
-                if not matchPatterns(rPath, excludes):  
-                    handleNewFileName(pArgs, mDict, [rPath, tPath, int(os.path.getmtime(tPath))], tar, iPath)                    
-                    
-                elif mDict.__contains__(rPath):
-                    mDict.pop(rPath)
-                    
+        tar.add( dPath, filter=tCFilter)
+                                                           
         tar.close()
         stream.flush()
                         
@@ -204,15 +235,18 @@ def handleBackupCreation(pArgs):
     except subprocess.CalledProcessError as e:                    
         return e.returncode            
         
-def getFiles(tar, v, bFPath):
+def getFiles(tar, v, bFPath, isFileMap):
     
     tInfo=[]
 
     for tMember in tar.getmembers():
-    	if tMember.name in v:
-          tInfo.append(tMember)
-          print(tMember.name+"\tEXTRACTED from "+bFPath)
-    
+
+        if tMember.name in v:
+            tInfo.append(tMember)
+
+            if(isFileMap[tMember.name]):
+                print(tMember.name+"\tEXTRACTED from "+bFPath)
+
     return tInfo
     
 def handleBackupRestoration(pArgs):   
@@ -224,7 +258,7 @@ def handleBackupRestoration(pArgs):
     
     try:
         
-        mDict=readXMLManifestFR(pArgs.backup+'.manifest', pArgs.includes, pArgs.aFlags)
+        mDict, isFileMap=readXMLManifestFR(pArgs.backup+'.manifest', pArgs.includes, pArgs.aFlags)
     
     except subprocess.CalledProcessError as e:                    
         return e.returncode     
@@ -236,7 +270,7 @@ def handleBackupRestoration(pArgs):
             stream=io.BytesIO(readFromBackup(os.path.join(iPath, k), pArgs.aFlags))
                                     
             tar=tarfile.open(mode="r:", fileobj=stream)                        
-            tar.extractall(path=".", members=getFiles(tar, v, k))
+            tar.extractall(path=".", members=getFiles(tar, v, k, isFileMap))
                                                         
         except subprocess.CalledProcessError as e:                    
             return e.returncode
@@ -275,8 +309,18 @@ def getXmlManifestFromDict(mDict, rDir):
             
             fPChild = SubElement(child, 'path')
             fPChild.text = v[3]
+
+            sChild = SubElement(child, 'uid')
+            sChild.text = str(v[5])
+
+            sChild = SubElement(child, 'gid')
+            sChild.text = str(v[6])  
+
+            sChild = SubElement(child, 'isFile')
+            sChild.text = str(v[7])                                   
             
-            printInfo(v[4], k)                    
+            if v[7]:
+                printInfo(v[4], k)                    
           
     return prettify(top)                       
 

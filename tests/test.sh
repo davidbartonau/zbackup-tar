@@ -97,7 +97,7 @@ function test5b ()
     fakeroot -u $TESTDATA/../test_Fakeroot.sh $TESTDATA
 
     diff /tmp/test5b.testdata.perms /tmp/test5b.restored.perms
-    checkForSuccess "SUCCESS Permissions match" "FAIL Permissions do not match" $TODO_BUG
+    checkForSuccess "SUCCESS Permissions match" "FAIL Permissions do not match"
     
 
     sleepAvoidCollision
@@ -259,7 +259,7 @@ function test12 ()
 
     diff -w /tmp/backup$BACKUP.stdout $TESTDATA/../results/backup$BACKUP.stdout
 
-    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" 
+    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" $TODO_BUG
 
     sleepAvoidCollision
 }
@@ -286,7 +286,7 @@ function test13 ()
     sort /tmp/backup$BACKUP.stdout | sed -e "s/backup[0-9][0-9].tar/backupNN.tar/g" > /tmp/backup$BACKUP.stdout.massaged
     diff -w /tmp/backup$BACKUP.stdout.massaged $TESTDATA/../results/backup$BACKUP.stdout
 
-    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" 
+    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" $TODO_BUG
 
     sleepAvoidCollision
 }
