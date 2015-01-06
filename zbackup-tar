@@ -23,7 +23,7 @@ from xml.etree import ElementTree
 from xml.etree.ElementTree import Element, SubElement
 from xml.dom import minidom
 from collections import OrderedDict
-import sys, argparse, os, time, pprint, datetime, hashlib, subprocess, io, tarfile, fnmatch, re
+import sys, argparse, os, time, pprint, datetime, hashlib, subprocess, io, tarfile, fnmatch, re, math
 
 dPath=""
 nBackup=""
@@ -32,6 +32,7 @@ excludes=[]
 mDict={}
 mAge=0
 mAJitter=0
+EPSILON=0.01
 
 def readFromBackup(fName, aFlags):
     
@@ -131,18 +132,8 @@ def tCFilter(tInfo):
 
 	if not matchPatterns(rPath, excludes):
 
-		if(tInfo.islnk() or tInfo.issym()):
-
-			if(os.path.exists(tInfo.linkname)):
-				return handleNewElement([rPath, int(os.path.getmtime(tInfo.name))], tInfo)
-
-			return None		
-
-		if(tInfo.isdir()):						
-			return handleNewElement([rPath, int(os.path.getmtime(tInfo.name))], tInfo)			
-
-		elif( tInfo.isfile() ):
-			return handleNewElement([rPath, int(os.path.getmtime(tInfo.name))], tInfo)			
+		if(tInfo.islnk() or tInfo.issym() or tInfo.isdir() or tInfo.isfile() ):						
+			return handleNewElement([rPath, tInfo.mtime], tInfo)			
 
 	elif mDict.__contains__(rPath):
 		mDict.pop(rPath)		
@@ -152,13 +143,13 @@ def handleNewElement(info, tInfo):
     if(mDict.__contains__(info[0])):
         mDict[info[0]][4]=1
 
-    if (not mDict.__contains__(info[0])) or mDict[info[0]][0]<info[1] or mDict[info[0]][5]!=tInfo.uid or mDict[info[0]][6]!=tInfo.gid:
+    if (not mDict.__contains__(info[0])) or (info[1]-mDict[info[0]][0])>1 or mDict[info[0]][5]!=tInfo.uid or mDict[info[0]][6]!=tInfo.gid:
         
         if not mDict.__contains__(info[0]):
             val=2
-        else:        
+        else:                 
             val=3        
-
+          
         if(tInfo.isdir()):
             mDict[info[0]]=[info[1], int(time.time()), tInfo.size, os.path.relpath(os.path.realpath(nBackup), iPath), val, tInfo.uid, tInfo.gid, 0]                    
         else:    
