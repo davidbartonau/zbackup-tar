@@ -32,9 +32,47 @@ excludes=[]
 mDict={}
 mAge=0
 mAJitter=0
-EPSILON=0.01
 
-def readFromBackup(fName, aFlags):
+def shouldExtract(fName, v, bFPath, isFileMap):
+    
+    if fName in v:
+
+        if(isFileMap[fName]):
+            print(fName+"\tEXTRACTED from "+bFPath)
+
+        return True
+
+    return False
+
+def extractFilesFromBackup(fName, aFlags, k, v, isFileMap):
+
+    if(aFlags):
+        shellCmd = "zbackup restore "+fName+' '+' '.join(aFlags)+' | cat'
+    else:
+        shellCmd = "zbackup restore "+fName+' | cat'         
+
+    proc = subprocess.Popen(shellCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+    with tarfile.open(mode="r|", fileobj=proc.stdout) as tar:  
+
+        while True:
+            nextTInfo = tar.next();
+
+            if not nextTInfo:
+                break
+
+            if(shouldExtract(nextTInfo.name, v, k, isFileMap)):
+                tar.extract(nextTInfo)
+
+            tar.members=[]
+                                                           
+        tar.close() 
+
+    proc.communicate()            
+    proc.wait()     
+
+
+def readManifestFromBackup(fName, aFlags):
     
     retString=bytes()
 
@@ -49,9 +87,26 @@ def readFromBackup(fName, aFlags):
 
     proc.wait()    
     
-    return retString         
+    return retString  
+
+def createZBackup(fName, aFlags):
+
+    if(aFlags):
+        cCmd = "zbackup backup "+fName+" "+' '.join(aFlags)
+        proc = subprocess.Popen(cCmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        proc = subprocess.Popen(["zbackup", "backup", fName], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)          
+
+    with tarfile.open(mode="w|", fileobj=proc.stdin) as tar:    
+
+        tar.add( dPath, filter=tCFilter)
+                                                           
+        tar.close() 
+
+    proc.communicate()            
+    proc.wait()                  
                 
-def createZBackup(fName, data, aFlags):    
+def createZBackupOfManifest(fName, data, aFlags):    
 	    
     if(aFlags):
         cCmd = "zbackup backup "+fName+" "+' '.join(aFlags)
@@ -68,7 +123,7 @@ def readXMLManifestFC(fName, aFlags):
     
     mDict={}
     
-    data=readFromBackup(fName, aFlags)
+    data=readManifestFromBackup(fName, aFlags)
                 
     tree = ElementTree.fromstring(data)
     
@@ -102,7 +157,7 @@ def readXMLManifestFR(fName, includes, aFlags):
     isFileMap={}
     iList=generatePatterns(includes)
 
-    data=readFromBackup(fName, aFlags)
+    data=readManifestFromBackup(fName, aFlags)
 	            
     tree = ElementTree.fromstring(data)        
 
@@ -199,46 +254,20 @@ def handleBackupCreation(pArgs):
     else:
         mDict={}
 
-    stream=io.BytesIO()
-
     excludes=[]
 
     if pArgs.excludes:
         excludes=generatePatterns(pArgs.excludes)
-
-    with tarfile.open(mode="w|", fileobj=stream) as tar:    
-
-        tar.add( dPath, filter=tCFilter)
-                                                           
-        tar.close()
-        stream.flush()
-                        
-    data = stream.getvalue()
-    stream.close()
     
     try:
             
-        createZBackup(pArgs.nBackup, data, pArgs.aFlags)                                    
-        createZBackup(pArgs.nBackup+'.manifest', bytes(getXmlManifestFromDict(mDict, pArgs.dPath), 'UTF-8'), pArgs.aFlags)            
+        createZBackup(pArgs.nBackup, pArgs.aFlags)                                    
+        createZBackupOfManifest(pArgs.nBackup+'.manifest', bytes(getXmlManifestFromDict(mDict, pArgs.dPath), 'UTF-8'), pArgs.aFlags)            
                                                                 
         return 0        
         
     except subprocess.CalledProcessError as e:                    
-        return e.returncode            
-        
-def getFiles(tar, v, bFPath, isFileMap):
-    
-    tInfo=[]
-
-    for tMember in tar.getmembers():
-
-        if tMember.name in v:
-            tInfo.append(tMember)
-
-            if(isFileMap[tMember.name]):
-                print(tMember.name+"\tEXTRACTED from "+bFPath)
-
-    return tInfo
+        return e.returncode                    
     
 def handleBackupRestoration(pArgs):   
 
@@ -250,25 +279,13 @@ def handleBackupRestoration(pArgs):
     try:
         
         mDict, isFileMap=readXMLManifestFR(pArgs.backup+'.manifest', pArgs.includes, pArgs.aFlags)
+
+        for k, v in mDict.items():
+            extractFilesFromBackup(os.path.join(iPath, k), pArgs.aFlags, k, v, isFileMap)                    
     
     except subprocess.CalledProcessError as e:                    
         return e.returncode     
-    
-    for k, v in mDict.items():            
-                
-        try:
 
-            stream=io.BytesIO(readFromBackup(os.path.join(iPath, k), pArgs.aFlags))
-                                    
-            tar=tarfile.open(mode="r:", fileobj=stream)                        
-            tar.extractall(path=".", members=getFiles(tar, v, k, isFileMap))
-                                                        
-        except subprocess.CalledProcessError as e:                    
-            return e.returncode
-        
-        finally:                        
-            stream.close() 
-        
     return 0  
 
 def getXmlManifestFromDict(mDict, rDir):     
