@@ -44,9 +44,10 @@ checkForFailure ()
 
 function backupAndRestoreDir ()
 {
-    PREVNAME=$1
-    BACKUPNAME=$2
-    LOCAL_TODO_BUG=$3
+    local PREVNAME=$1
+    local BACKUPNAME=$2
+    local LOCAL_TODO_BUG=$3
+    local PREVBACKUP
 
     if [ -z "$PREVNAME" ]; then
         PREVBACKUP=""
@@ -68,7 +69,7 @@ function backupAndRestoreDir ()
 
     echo Checking $BACKUPNAME
 
-    diff -rq $TESTDATA/ $TMPDIR/restored/
+    diff -rq  --no-dereference $TESTDATA/ $TMPDIR/restored/
     checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME" $LOCAL_TODO_BUG
 
     zbackup restore --silent $TMPDIR/zbackup/backups/$BACKUPNAME.manifest > /tmp/$BACKUPNAME.manifest

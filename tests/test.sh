@@ -37,7 +37,7 @@ function test1Encrypted ()
     zbackup-tar restore --zbackupArgs "--password-file $TMPDIR/password" --backup $TMPDIR/zbackup_encrypted/backups/backup01.tar
     checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed"
 
-    diff -rq $TESTDATA/ $TMPDIR/restored/
+    diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
     checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME"
 }
 
@@ -180,13 +180,13 @@ function test9 ()
     zbackup restore --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
     echo Checking backup $BACKUP
-    diff -rq $TESTDATA/ $TMPDIR/restored/
+    diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
 
     checkForFailure "FAIL txt files should be different" "SUCCESS backup $BACKUP is different"
 
     find $TESTDATA/ -name "*.txt" -print0 | xargs -0 rm -v
 
-    diff -rq $TESTDATA/ $TMPDIR/restored/
+    diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
 
     checkForSuccess "SUCCESS After removing txt files, backup should be the same" "FAIL backup files were different"
 
@@ -211,7 +211,7 @@ function test10 ()
     zbackup restore --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
     echo Checking backup $BACKUP
-    diff -rq $TESTDATA/ $TMPDIR/restored/ > /tmp/backup$BACKUP.diff
+    diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/ > /tmp/backup$BACKUP.diff
 
     checkForFailure "FAIL txt files should be different" "SUCCESS backup $BACKUP is different"
 
@@ -303,7 +303,7 @@ function test14 ()
     rm -rf $TMPDIR/restored/*
     zbackup-tar restore --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar folder1/
 
-    diff -rq $TESTDATA/folder1/ $TMPDIR/restored/folder1/
+    diff -rq --no-dereference $TESTDATA/folder1/ $TMPDIR/restored/folder1/
 
     checkForSuccess "SUCCESS - folder1 is the same" "FAILURE folder1 is different"
 
@@ -347,7 +347,7 @@ function test16 ()
     ln -sT /dev/broken $TESTDATA/broken.link
     ln -sT /etc/init.d $TESTDATA/initd.link
 
-    backupAndRestoreDir backup15.tar backup$BACKUP.tar $TODO_BUG
+    backupAndRestoreDir backup15.tar backup$BACKUP.tar
 
     find $TESTDATA -name "*.link" -print0 | xargs -0 rm -v
     sleepAvoidCollision
@@ -380,7 +380,7 @@ function testSleep ()
 
 find $TESTDATA -name "*.txt" -print0 | xargs -0 rm -v
 find $TESTDATA -name "*.link" -print0 | xargs -0 rm -v
-[ $TODO_BUG ] || mkdir -v $TESTDATA/empty
+mkdir -v $TESTDATA/empty
 
 chmod --reference=/tmp/zbackup-tar/zbackup/bundles /tmp/zbackup-tar/zbackup/index/
 rm -rf $TMPDIR
@@ -415,6 +415,9 @@ for i in `seq 1 3`; do
     testSleep $PREVBACKUP $BACKUP
 done;
 
+grep backup01 /tmp/backup$BACKUP.tar.manifest
+
+checkForFailure "FAIL backup01 is in use" "SUCCESS backup01 is no longer in use"
 
 
 find $TESTDATA -name "*.txt" -print0 | xargs -0 rm -v
