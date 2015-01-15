@@ -23,7 +23,7 @@ from xml.etree import ElementTree
 from xml.etree.ElementTree import Element, SubElement
 from xml.dom import minidom
 from collections import OrderedDict
-import sys, argparse, os, time, pprint, datetime, hashlib, subprocess, io, tarfile, fnmatch, re, math
+import sys, argparse, os, time, pprint, datetime, hashlib, subprocess, io, tarfile, fnmatch, re, csv
 
 dPath=""
 nBackup=""
@@ -32,6 +32,168 @@ excludes=[]
 mDict={}
 mAge=0
 mAJitter=0
+
+def readCSVManifestFC(fName, aFlags):
+    
+    mDict={}
+
+    data=readManifestFromBackup(fName, aFlags).decode('utf-8')
+
+    if not data:
+        raise Exception(-1)
+    
+    sIO=io.StringIO(data)
+    csvReader=csv.reader(sIO, dialect='unix', quoting=csv.QUOTE_MINIMAL)    
+
+    for row in csvReader:    
+        mDict[row[0]]=[getETFromStr(row[2]), getETFromStr(row[3]), int(row[1]), row[4], 0, int(row[5]), int(row[6]), int(row[7])]                
+        
+    return mDict 
+
+def readXMLManifestFC(fName, aFlags):
+    
+    mDict={}
+    
+    data=readManifestFromBackup(fName, aFlags)
+                
+    tree = ElementTree.fromstring(data)
+    
+    for node in tree.iter('fDesc'):
+    
+        key=node.find('name').text            
+        mDict[key]=[getETFromStr(node.find('modOn').text), getETFromStr(node.find('backupOn').text), int(node.find('size').text), node.find('path').text, 0, int(node.find('uid').text), int(node.find('gid').text), int(node.find('isFile').text)]            
+    
+    return mDict 
+
+def readCSVManifestFR(fName, includes, aFlags):
+
+    mDict={}
+    isFileMap={}
+    iList=generatePatterns(includes)
+
+    data=readManifestFromBackup(fName, aFlags).decode('utf-8')
+
+    if not data:
+        raise Exception(-1)
+    
+    sIO=io.StringIO(data)    
+    csvReader=csv.reader(sIO, dialect='unix', quoting=csv.QUOTE_MINIMAL)    
+ 
+    for row in csvReader: 
+    
+        name=row[0]
+
+        if not matchPatterns(name, iList):
+            continue
+
+        key=row[4]
+
+        if not mDict.__contains__(key):
+            mDict[key]=set()
+
+        mDict[key].add(name)
+
+        isFileMap[name]=int(row[7])				
+	    
+    return mDict, isFileMap    
+
+def readXMLManifestFR(fName, includes, aFlags):
+
+    mDict={}
+    isFileMap={}
+    iList=generatePatterns(includes)
+
+    data=readManifestFromBackup(fName, aFlags)
+	            
+    tree = ElementTree.fromstring(data)        
+
+    for node in tree.iter('fDesc'):
+
+        name=node.find('name').text
+
+        if not matchPatterns(name, iList):
+            continue
+
+        key=node.find('path').text
+
+        if not mDict.__contains__(key):
+            mDict[key]=set()
+
+        mDict[key].add(name)
+
+        isFileMap[name]=int(node.find('isFile').text)				
+	    
+    return mDict, isFileMap
+
+def getCSVManifestFromDict(mDict, rDir):     
+        
+    sDict=OrderedDict(sorted(mDict.items()))
+
+    sIO=io.StringIO()
+    csvWriter=csv.writer(sIO, dialect='unix', quoting=csv.QUOTE_MINIMAL)
+
+    data=[]
+
+    for k, v in sDict.items():
+        
+        if v[4]>0:                               
+            
+            data.append([k, v[2], datetime.datetime.fromtimestamp(v[0]).strftime('%Y-%m-%dT%H:%M:%S'), datetime.datetime.fromtimestamp(v[1]).strftime('%Y-%m-%dT%H:%M:%S'), v[3], v[5], v[6], v[7]])
+            
+            if v[7]:
+                printInfo(v[4], k)                    
+
+    csvWriter.writerows(data)
+
+    return sIO.getvalue()    
+
+def getXmlManifestFromDict(mDict, rDir):     
+        
+    sDict=OrderedDict(sorted(mDict.items()))
+
+    top = Element('info')         
+
+    for k, v in sDict.items():
+        
+        if v[4]>0:
+                                
+            child = SubElement(top, 'fDesc')
+            
+            nChild = SubElement(child, 'name')
+            nChild.text = k
+            
+            sChild = SubElement(child, 'size')
+            sChild.text = str(v[2])
+            
+            moChild = SubElement(child, 'modOn')
+            moChild.text = datetime.datetime.fromtimestamp(v[0]).strftime('%Y-%m-%dT%H:%M:%S')
+            
+            boChild = SubElement(child, 'backupOn')
+            boChild.text = datetime.datetime.fromtimestamp(v[1]).strftime('%Y-%m-%dT%H:%M:%S') 
+            
+            fPChild = SubElement(child, 'path')
+            fPChild.text = v[3]
+
+            sChild = SubElement(child, 'uid')
+            sChild.text = str(v[5])
+
+            sChild = SubElement(child, 'gid')
+            sChild.text = str(v[6])  
+
+            sChild = SubElement(child, 'isFile')
+            sChild.text = str(v[7])                                   
+            
+            if v[7]:
+                printInfo(v[4], k)                    
+          
+    return prettify(top)
+
+def prettify(elem):
+    
+    rString = ElementTree.tostring(elem, 'UTF-8')
+    rParsed = minidom.parseString(rString)
+    
+    return str(rParsed.toprettyxml(indent="  "))            
 
 def shouldExtract(fName, v, bFPath, isFileMap):
     
@@ -117,22 +279,7 @@ def createZBackupOfManifest(fName, data, aFlags):
     proc.stdin.write(data)
             
     proc.communicate()            
-    proc.wait()
-        
-def readXMLManifestFC(fName, aFlags):
-    
-    mDict={}
-    
-    data=readManifestFromBackup(fName, aFlags)
-                
-    tree = ElementTree.fromstring(data)
-    
-    for node in tree.iter('fDesc'):
-    
-        key=node.find('name').text            
-        mDict[key]=[getETFromStr(node.find('modOn').text), getETFromStr(node.find('backupOn').text), int(node.find('size').text), node.find('path').text, 0, int(node.find('uid').text), int(node.find('gid').text), int(node.find('isFile').text)]            
-    
-    return mDict    
+    proc.wait()           
 
 def generatePatterns(fnPatterns):
 
@@ -149,35 +296,7 @@ def matchPatterns(string, pList):
         if re.search(pattern, string)!=None:
             return True
 
-    return False
-                                                
-def readXMLManifestFR(fName, includes, aFlags):
-
-    mDict={}
-    isFileMap={}
-    iList=generatePatterns(includes)
-
-    data=readManifestFromBackup(fName, aFlags)
-	            
-    tree = ElementTree.fromstring(data)        
-
-    for node in tree.iter('fDesc'):
-
-        name=node.find('name').text
-
-        if not matchPatterns(name, iList):
-            continue
-
-        key=node.find('path').text
-
-        if not mDict.__contains__(key):
-            mDict[key]=set()
-
-        mDict[key].add(name)
-
-        isFileMap[name]=int(node.find('isFile').text)				
-	    
-    return mDict, isFileMap
+    return False                                                
 
 def tCFilter(tInfo):
 
@@ -246,7 +365,7 @@ def handleBackupCreation(pArgs):
     if pArgs.pBackup:
                 
         try:
-            mDict=readXMLManifestFC(pArgs.pBackup+'.manifest', pArgs.aFlags)
+            mDict=readCSVManifestFC(pArgs.pBackup+'.manifest', pArgs.aFlags)
                                     
         except subprocess.CalledProcessError as e:                    
             return e.returncode                    
@@ -262,7 +381,8 @@ def handleBackupCreation(pArgs):
     try:
             
         createZBackup(pArgs.nBackup, pArgs.aFlags)                                    
-        createZBackupOfManifest(pArgs.nBackup+'.manifest', bytes(getXmlManifestFromDict(mDict, pArgs.dPath), 'UTF-8'), pArgs.aFlags)            
+        """createZBackupOfManifest(pArgs.nBackup+'.manifest', bytes(getXmlManifestFromDict(mDict, pArgs.dPath), 'UTF-8'), pArgs.aFlags)"""            
+        createZBackupOfManifest(pArgs.nBackup+'.manifest', bytes(getCSVManifestFromDict(mDict, pArgs.dPath), 'UTF-8'), pArgs.aFlags)
                                                                 
         return 0        
         
@@ -278,7 +398,7 @@ def handleBackupRestoration(pArgs):
     
     try:
         
-        mDict, isFileMap=readXMLManifestFR(pArgs.backup+'.manifest', pArgs.includes, pArgs.aFlags)
+        mDict, isFileMap=readCSVManifestFR(pArgs.backup+'.manifest', pArgs.includes, pArgs.aFlags)
 
         for k, v in mDict.items():
             extractFilesFromBackup(os.path.join(iPath, k), pArgs.aFlags, k, v, isFileMap)                    
@@ -286,51 +406,7 @@ def handleBackupRestoration(pArgs):
     except subprocess.CalledProcessError as e:                    
         return e.returncode     
 
-    return 0  
-
-def getXmlManifestFromDict(mDict, rDir):     
-        
-    sDict=OrderedDict(sorted(mDict.items()))
-
-    top = Element('info')
-    
-    dChild = SubElement(top, 'bDir')
-    dChild.text=os.path.basename(os.path.realpath(rDir))+"/"        
-
-    for k, v in sDict.items():
-        
-        if v[4]>0:
-                                
-            child = SubElement(top, 'fDesc')
-            
-            nChild = SubElement(child, 'name')
-            nChild.text = k
-            
-            sChild = SubElement(child, 'size')
-            sChild.text = str(v[2])
-            
-            moChild = SubElement(child, 'modOn')
-            moChild.text = datetime.datetime.fromtimestamp(v[0]).strftime('%Y-%m-%dT%H:%M:%S')
-            
-            boChild = SubElement(child, 'backupOn')
-            boChild.text = datetime.datetime.fromtimestamp(v[1]).strftime('%Y-%m-%dT%H:%M:%S') 
-            
-            fPChild = SubElement(child, 'path')
-            fPChild.text = v[3]
-
-            sChild = SubElement(child, 'uid')
-            sChild.text = str(v[5])
-
-            sChild = SubElement(child, 'gid')
-            sChild.text = str(v[6])  
-
-            sChild = SubElement(child, 'isFile')
-            sChild.text = str(v[7])                                   
-            
-            if v[7]:
-                printInfo(v[4], k)                    
-          
-    return prettify(top)                       
+    return 0                         
 
 def getInfoPath(pPath):
         
@@ -341,14 +417,7 @@ def getInfoPath(pPath):
         return getInfoPath(os.path.dirname(pPath))
     
     else:
-        return ""
-            
-def prettify(elem):
-    
-    rString = ElementTree.tostring(elem, 'UTF-8')
-    rParsed = minidom.parseString(rString)
-    
-    return str(rParsed.toprettyxml(indent="  "))
+        return ""            
 
 def printInfo(index, fName):
     
