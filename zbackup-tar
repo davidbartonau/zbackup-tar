@@ -19,9 +19,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from xml.etree import ElementTree
-from xml.etree.ElementTree import Element, SubElement
-from xml.dom import minidom
 from collections import OrderedDict
 import sys, argparse, os, time, pprint, datetime, hashlib, subprocess, io, tarfile, fnmatch, re, csv
 
@@ -48,21 +45,6 @@ def readCSVManifestFC(fName, aFlags):
     for row in csvReader:    
         mDict[row[0]]=[getETFromStr(row[2]), getETFromStr(row[3]), int(row[1]), row[4], 0, int(row[5]), int(row[6]), int(row[7])]                
         
-    return mDict 
-
-def readXMLManifestFC(fName, aFlags):
-    
-    mDict={}
-    
-    data=readManifestFromBackup(fName, aFlags)
-                
-    tree = ElementTree.fromstring(data)
-    
-    for node in tree.iter('fDesc'):
-    
-        key=node.find('name').text            
-        mDict[key]=[getETFromStr(node.find('modOn').text), getETFromStr(node.find('backupOn').text), int(node.find('size').text), node.find('path').text, 0, int(node.find('uid').text), int(node.find('gid').text), int(node.find('isFile').text)]            
-    
     return mDict 
 
 def readCSVManifestFR(fName, includes, aFlags):
@@ -97,34 +79,6 @@ def readCSVManifestFR(fName, includes, aFlags):
 	    
     return mDict, isFileMap    
 
-def readXMLManifestFR(fName, includes, aFlags):
-
-    mDict={}
-    isFileMap={}
-    iList=generatePatterns(includes)
-
-    data=readManifestFromBackup(fName, aFlags)
-	            
-    tree = ElementTree.fromstring(data)        
-
-    for node in tree.iter('fDesc'):
-
-        name=node.find('name').text
-
-        if not matchPatterns(name, iList):
-            continue
-
-        key=node.find('path').text
-
-        if not mDict.__contains__(key):
-            mDict[key]=set()
-
-        mDict[key].add(name)
-
-        isFileMap[name]=int(node.find('isFile').text)				
-	    
-    return mDict, isFileMap
-
 def getCSVManifestFromDict(mDict, rDir):     
         
     sDict=OrderedDict(sorted(mDict.items()))
@@ -145,55 +99,7 @@ def getCSVManifestFromDict(mDict, rDir):
 
     csvWriter.writerows(data)
 
-    return sIO.getvalue()    
-
-def getXmlManifestFromDict(mDict, rDir):     
-        
-    sDict=OrderedDict(sorted(mDict.items()))
-
-    top = Element('info')         
-
-    for k, v in sDict.items():
-        
-        if v[4]>0:
-                                
-            child = SubElement(top, 'fDesc')
-            
-            nChild = SubElement(child, 'name')
-            nChild.text = k
-            
-            sChild = SubElement(child, 'size')
-            sChild.text = str(v[2])
-            
-            moChild = SubElement(child, 'modOn')
-            moChild.text = datetime.datetime.fromtimestamp(v[0]).strftime('%Y-%m-%dT%H:%M:%S')
-            
-            boChild = SubElement(child, 'backupOn')
-            boChild.text = datetime.datetime.fromtimestamp(v[1]).strftime('%Y-%m-%dT%H:%M:%S') 
-            
-            fPChild = SubElement(child, 'path')
-            fPChild.text = v[3]
-
-            sChild = SubElement(child, 'uid')
-            sChild.text = str(v[5])
-
-            sChild = SubElement(child, 'gid')
-            sChild.text = str(v[6])  
-
-            sChild = SubElement(child, 'isFile')
-            sChild.text = str(v[7])                                   
-            
-            if v[7]:
-                printInfo(v[4], k)                    
-          
-    return prettify(top)
-
-def prettify(elem):
-    
-    rString = ElementTree.tostring(elem, 'UTF-8')
-    rParsed = minidom.parseString(rString)
-    
-    return str(rParsed.toprettyxml(indent="  "))            
+    return sIO.getvalue()              
 
 def shouldExtract(fName, v, bFPath, isFileMap):
     
@@ -207,6 +113,7 @@ def shouldExtract(fName, v, bFPath, isFileMap):
     return False
 
 def extractFilesFromBackup(fName, aFlags, k, v, isFileMap):
+
     with open(os.devnull, "w") as fnull:
 
         if(aFlags):
@@ -236,6 +143,7 @@ def extractFilesFromBackup(fName, aFlags, k, v, isFileMap):
 
 
 def readManifestFromBackup(fName, aFlags):
+
     with open(os.devnull, "w") as fnull:
 
         retString=bytes()
@@ -254,6 +162,7 @@ def readManifestFromBackup(fName, aFlags):
     return retString  
 
 def createZBackup(fName, aFlags):
+
     with open(os.devnull, "w") as fnull:
 
         if(aFlags):
@@ -271,7 +180,8 @@ def createZBackup(fName, aFlags):
         proc.communicate()            
         proc.wait()                  
                 
-def createZBackupOfManifest(fName, data, aFlags):    
+def createZBackupOfManifest(fName, data, aFlags):  
+
     with open(os.devnull, "w") as fnull:
 
         if(aFlags):
@@ -290,7 +200,11 @@ def generatePatterns(fnPatterns):
     pList=[]
 
     for x in fnPatterns:
-        pList.append(fnmatch.translate(x)[:-7])
+
+        if x[-1]=='/':
+            x=x+'*'
+
+        pList.append(fnmatch.translate(x)[:-7]+"$")
 
     return pList
 
@@ -304,17 +218,23 @@ def matchPatterns(string, pList):
 
 def tCFilter(tInfo):
 
-	tInfo.name='/'+tInfo.name
+    tInfo.name='/'+tInfo.name
 
-	rPath=os.path.relpath(tInfo.name, dPath)
+    rPath=os.path.relpath(tInfo.name, dPath)
 
-	if not matchPatterns(rPath, excludes):
+    if tInfo.isdir():
+        rPath=rPath+'/'
 
-		if(tInfo.islnk() or tInfo.issym() or tInfo.isdir() or tInfo.isfile() ):						
-			return handleNewElement([rPath, tInfo.mtime], tInfo)			
+    if not matchPatterns(rPath, excludes):
 
-	elif mDict.__contains__(rPath):
-		mDict.pop(rPath)		
+        if(tInfo.islnk() or tInfo.issym() or tInfo.isfile() ):						
+            return handleNewElement([rPath, tInfo.mtime], tInfo)			
+
+        elif tInfo.isdir():
+            return handleNewElement([rPath[:-1], tInfo.mtime], tInfo)            
+
+    elif mDict.__contains__(rPath):
+        mDict.pop(rPath)		
 
 def handleNewElement(info, tInfo):
 
@@ -384,8 +304,7 @@ def handleBackupCreation(pArgs):
     
     try:
             
-        createZBackup(pArgs.nBackup, pArgs.aFlags)                                    
-        """createZBackupOfManifest(pArgs.nBackup+'.manifest', bytes(getXmlManifestFromDict(mDict, pArgs.dPath), 'UTF-8'), pArgs.aFlags)"""            
+        createZBackup(pArgs.nBackup, pArgs.aFlags)                                
         createZBackupOfManifest(pArgs.nBackup+'.manifest', bytes(getCSVManifestFromDict(mDict, pArgs.dPath), 'UTF-8'), pArgs.aFlags)
                                                                 
         return 0        
