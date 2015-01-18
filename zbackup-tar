@@ -207,79 +207,83 @@ def shouldExtract(fName, v, bFPath, isFileMap):
     return False
 
 def extractFilesFromBackup(fName, aFlags, k, v, isFileMap):
+    with open(os.devnull, "w") as fnull:
 
-    if(aFlags):
-        shellCmd = "zbackup restore "+fName+' '+' '.join(aFlags)+' | cat'
-    else:
-        shellCmd = "zbackup restore "+fName+' | cat'         
+        if(aFlags):
+            shellCmd = "zbackup restore "+fName+' '+' '.join(aFlags)+' | cat'
+        else:
+            shellCmd = "zbackup restore "+fName+' | cat'         
 
-    proc = subprocess.Popen(shellCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(shellCmd, shell=True, stdout=subprocess.PIPE, stderr=fnull)
 
-    with tarfile.open(mode="r|", fileobj=proc.stdout) as tar:  
+        with tarfile.open(mode="r|", fileobj=proc.stdout) as tar:  
 
-        while True:
-            nextTInfo = tar.next();
+            while True:
+                nextTInfo = tar.next();
 
-            if not nextTInfo:
-                break
+                if not nextTInfo:
+                    break
 
-            if(shouldExtract(nextTInfo.name, v, k, isFileMap)):
-                tar.extract(nextTInfo)
+                if(shouldExtract(nextTInfo.name, v, k, isFileMap)):
+                    tar.extract(nextTInfo)
 
-            tar.members=[]
-                                                           
-        tar.close() 
+                tar.members=[]
+                                                               
+            tar.close() 
 
-    proc.communicate()            
-    proc.wait()     
+        proc.communicate()            
+        proc.wait()     
 
 
 def readManifestFromBackup(fName, aFlags):
-    
-    retString=bytes()
+    with open(os.devnull, "w") as fnull:
 
-    if(aFlags):
-        shellCmd = "zbackup restore "+fName+' '+' '.join(aFlags)+' | cat'
-    else:
-        shellCmd = "zbackup restore "+fName+' | cat'	    	
+        retString=bytes()
 
-    proc = subprocess.Popen(shellCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        if(aFlags):
+            shellCmd = "zbackup restore "+fName+' '+' '.join(aFlags)+' | cat'
+        else:
+            shellCmd = "zbackup restore "+fName+' | cat'	    	
 
-    retString+=proc.stdout.read()    
+        proc = subprocess.Popen(shellCmd, shell=True, stdout=subprocess.PIPE, stderr=fnull)
 
-    proc.wait()    
+        retString+=proc.stdout.read()    
+
+        proc.wait()    
     
     return retString  
 
 def createZBackup(fName, aFlags):
+    with open(os.devnull, "w") as fnull:
 
-    if(aFlags):
-        cCmd = "zbackup backup "+fName+" "+' '.join(aFlags)
-        proc = subprocess.Popen(cCmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    else:
-        proc = subprocess.Popen(["zbackup", "backup", fName], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)          
+        if(aFlags):
+            cCmd = "zbackup backup "+fName+" "+' '.join(aFlags)
+            proc = subprocess.Popen(cCmd, shell=True, stdin=subprocess.PIPE, stdout=fnull, stderr=fnull)
+        else:
+            proc = subprocess.Popen(["zbackup", "backup", fName], stdin=subprocess.PIPE, stdout=fnull, stderr=fnull)          
 
-    with tarfile.open(mode="w|", fileobj=proc.stdin) as tar:    
+        with tarfile.open(mode="w|", fileobj=proc.stdin) as tar:    
 
-        tar.add( dPath, filter=tCFilter)
-                                                           
-        tar.close() 
+            tar.add( dPath, filter=tCFilter)
+                                                               
+            tar.close() 
 
-    proc.communicate()            
-    proc.wait()                  
+        proc.communicate()            
+        proc.wait()                  
                 
 def createZBackupOfManifest(fName, data, aFlags):    
-	    
-    if(aFlags):
-        cCmd = "zbackup backup "+fName+" "+' '.join(aFlags)
-        proc = subprocess.Popen(cCmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    else:
-        proc = subprocess.Popen(["zbackup", "backup", fName], stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)	    	
+    with open(os.devnull, "w") as fnull:
 
-    proc.stdin.write(data)
-            
-    proc.communicate()            
-    proc.wait()           
+        if(aFlags):
+            cCmd = "zbackup backup "+fName+" "+' '.join(aFlags)
+            proc = subprocess.Popen(cCmd, shell=True, stdin=subprocess.PIPE, stdout=fnull, stderr=fnull)
+        else:
+            proc = subprocess.Popen(["zbackup", "backup", fName], stdin=subprocess.PIPE, stdout=fnull, stderr=fnull)	    	
+
+        proc.stdin.write(data)
+                
+        proc.communicate()            
+        proc.wait()           
 
 def generatePatterns(fnPatterns):
 
