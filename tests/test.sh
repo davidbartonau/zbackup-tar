@@ -169,6 +169,7 @@ function test9 ()
     logResult "######## Backup 9 - Exclude txt files ########"
     export BACKUP=09
     rm -rf $TMPDIR/restored/*
+    date > $TESTDATA/file.txt
     echo Initial backup $BACKUP
     zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup08.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --maxAge 0.05 --maxAgeJitter 0.03 --exclude "*.txt" $TESTDATA/
 
@@ -188,7 +189,45 @@ function test9 ()
 
     diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
 
-    checkForSuccess "SUCCESS After removing txt files, backup should be the same" "FAIL backup files were different"
+    checkForSuccess "SUCCESS After removing txt files, backup should be the same" "FAIL backup files were different" $TODO_BUG
+
+    sleepAvoidCollision
+}
+
+
+
+function test9b ()
+{
+    logResult "######## Backup 9b - Exclude multiple extensions ########"
+    export BACKUP=09b
+    rm -rf $TMPDIR/restored/*
+    mkdir -v $TESTDATA/excludedir/
+    date > $TESTDATA/file.txt
+    date > $TESTDATA/file.exclude
+    date > $TESTDATA/excludedir/test.sh
+
+    echo Initial backup $BACKUP
+    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup08.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --maxAge 0.05 --maxAgeJitter 0.03 --exclude "*.txt" --exclude "*.exclude" --exclude "excludedir/" $TESTDATA/
+
+
+    echo Restore backup $BACKUP
+    cd $TMPDIR/restored/
+    zbackup-tar restore --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
+
+    zbackup restore --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
+
+    echo Checking backup $BACKUP
+    diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
+
+    checkForFailure "FAIL txt files should be different" "SUCCESS backup $BACKUP is different"
+
+    find $TESTDATA/ -name "*.txt" -print0 | xargs -0 rm -v
+    find $TESTDATA/ -name "*.exclude" -print0 | xargs -0 rm -v
+    find $TESTDATA/ -name "excludedir" -print0 | xargs -0 rm -rfv
+
+    diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
+
+    checkForSuccess "SUCCESS After removing txt and ,v and subdir1/, backup should be the same" "FAIL backup files were different" $TODO_BUG
 
     sleepAvoidCollision
 }
@@ -399,6 +438,7 @@ test6
 test7
 test8
 test9
+test9b
 test10
 test11
 test12

@@ -12,3 +12,6 @@ folder1/subfolder2/delivery_area_QLD_locality_20nov2014.csv	EXTRACTED from backu
 folder1/subfolder2/delivery_area_SA_locality_20nov2014.csv	EXTRACTED from backups/backupNN.tar
 folder2/file.txt	EXTRACTED from backups/backupNN.tar
 folder2/logo.png	EXTRACTED from backups/backupNN.tar
+funnyName'Quoted'.txt,v	EXTRACTED from backups/backupNN.tar
+funnyName"Quoted".txt,v	EXTRACTED from backups/backupNN.tar
+funnyName.txt,v	EXTRACTED from backups/backupNN.tar
