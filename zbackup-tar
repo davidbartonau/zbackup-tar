@@ -228,43 +228,43 @@ def tCFilter(tInfo):
     if not matchPatterns(rPath, excludes):
 
         if(tInfo.islnk() or tInfo.issym() or tInfo.isfile() ):						
-            return handleNewElement([rPath, tInfo.mtime], tInfo)			
+            return handleNewElement(rPath, tInfo)			
 
         elif tInfo.isdir():
-            return handleNewElement([rPath[:-1], tInfo.mtime], tInfo)            
+            return handleNewElement(rPath[:-1], tInfo)            
 
     elif mDict.__contains__(rPath):
         mDict.pop(rPath)		
 
-def handleNewElement(info, tInfo):
+def handleNewElement(rPath, tInfo):    
 
-    if(mDict.__contains__(info[0])):
-        mDict[info[0]][4]=1
+    if(mDict.__contains__(rPath)):
+        mDict[rPath][4]=1
 
-    if (not mDict.__contains__(info[0])) or (info[1]-mDict[info[0]][0])>1 or mDict[info[0]][5]!=tInfo.uid or mDict[info[0]][6]!=tInfo.gid:
+    if (not mDict.__contains__(rPath)) or (tInfo.mtime-mDict[rPath][0])>1 or mDict[rPath][5]!=tInfo.uid or mDict[rPath][6]!=tInfo.gid:
         
-        if not mDict.__contains__(info[0]):
+        if not mDict.__contains__(rPath):
             val=2
         else:                 
             val=3        
           
         if(tInfo.isdir()):
-            mDict[info[0]]=[info[1], int(time.time()), tInfo.size, os.path.relpath(os.path.realpath(nBackup), iPath), val, tInfo.uid, tInfo.gid, 0]                    
+            mDict[rPath]=[tInfo.mtime, int(time.time()), tInfo.size, os.path.relpath(os.path.realpath(nBackup), iPath), val, tInfo.uid, tInfo.gid, 0]                    
         else:    
-            mDict[info[0]]=[info[1], int(time.time()), tInfo.size, os.path.relpath(os.path.realpath(nBackup), iPath), val, tInfo.uid, tInfo.gid, 1]                            	
+            mDict[rPath]=[tInfo.mtime, int(time.time()), tInfo.size, os.path.relpath(os.path.realpath(nBackup), iPath), val, tInfo.uid, tInfo.gid, 1]                            	
         
-        tInfo.name=info[0]
+        tInfo.name=rPath
         return tInfo
 
     elif mAge: 
          
-        if shouldBack(mAge*3600, mAJitter*3600, info[0], mDict[info[0]][1]):
+        if shouldBack(mAge*3600, mAJitter*3600, rPath, mDict[rPath][1]):
             
-            mDict[info[0]][1]=int(time.time())            
-            mDict[info[0]][3]=os.path.relpath(os.path.realpath(nBackup), iPath)            
-            mDict[info[0]][4]=4                               
+            mDict[rPath][1]=int(time.time())            
+            mDict[rPath][3]=os.path.relpath(os.path.realpath(nBackup), iPath)            
+            mDict[rPath][4]=4                               
 
-            tInfo.name=info[0]
+            tInfo.name=rPath
             return tInfo
     
     if(tInfo.isdir()):
