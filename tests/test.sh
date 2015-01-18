@@ -189,7 +189,7 @@ function test9 ()
 
     diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
 
-    checkForSuccess "SUCCESS After removing txt files, backup should be the same" "FAIL backup files were different" $TODO_BUG
+    checkForSuccess "SUCCESS After removing txt files, backup should be the same" "FAIL backup files were different" 
 
     sleepAvoidCollision
 }
@@ -227,7 +227,7 @@ function test9b ()
 
     diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
 
-    checkForSuccess "SUCCESS After removing txt and ,v and subdir1/, backup should be the same" "FAIL backup files were different" $TODO_BUG
+    checkForSuccess "SUCCESS After removing txt and ,v and subdir1/, backup should be the same" "FAIL backup files were different" 
 
     sleepAvoidCollision
 }
