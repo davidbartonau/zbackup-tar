@@ -43,6 +43,31 @@ function test1Encrypted ()
 
 
 
+function test1SameDir ()
+{
+    logResult "######## Backup 1 - Same Dir ########"
+
+    BACKUPNAME=backup01_samedir.tar
+
+    cd $TESTDATA/
+    echo "I am now in " `pwd`
+
+    zbackup-tar create --previousBackup "" --newBackup $TMPDIR/zbackup/backups/$BACKUPNAME .
+    checkForSuccess "SUCCESS $BACKUPNAME backed up" "FAIL zbackup-tar failed"
+
+    cd $TMPDIR/restored/
+    rm -rf $TMPDIR/restored/*
+
+    zbackup-tar restore --backup $TMPDIR/zbackup/backups/$BACKUPNAME
+    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed" $LOCAL_TODO_BUG
+
+    restoreAndCheck
+
+    sleepAvoidCollision
+}
+
+
+
 function test2 ()
 {
     logResult "######## Backup 2 - No Changes ########"
@@ -428,6 +453,7 @@ mkdir -pv $TMPDIR/zbackup $TMPDIR/restored
 zbackup init --non-encrypted $TMPDIR/zbackup/
 
 test1
+test1SameDir
 test1Encrypted
 test2
 test3

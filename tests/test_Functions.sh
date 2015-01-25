@@ -59,11 +59,20 @@ function backupAndRestoreDir ()
     zbackup-tar create --previousBackup "$PREVBACKUP" --newBackup $TMPDIR/zbackup/backups/$BACKUPNAME --maxAge 0.03 --maxAgeJitter 0.02 $TESTDATA/
     checkForSuccess "SUCCESS $BACKUPNAME backed up" "FAIL zbackup-tar failed" $LOCAL_TODO_BUG
 
+    restoreAndCheck $LOCAL_TODO_BUG
+}
+
+
+function restoreAndCheck ()
+{
+    local LOCAL_TODO_BUG=$1
+
     echo Restore $BACKUPNAME
 
     cd $TMPDIR/restored/
     rm -rf $TMPDIR/restored/*
 
+    zbackup restore --silent $TMPDIR/zbackup/backups/$BACKUPNAME.manifest > /tmp/$BACKUPNAME.manifest
     zbackup-tar restore --backup $TMPDIR/zbackup/backups/$BACKUPNAME
     checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed" $LOCAL_TODO_BUG
 
@@ -71,8 +80,6 @@ function backupAndRestoreDir ()
 
     diff -rq  --no-dereference $TESTDATA/ $TMPDIR/restored/
     checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME" $LOCAL_TODO_BUG
-
-    zbackup restore --silent $TMPDIR/zbackup/backups/$BACKUPNAME.manifest > /tmp/$BACKUPNAME.manifest
 }
 
 
