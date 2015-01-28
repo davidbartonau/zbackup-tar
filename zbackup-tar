@@ -20,21 +20,65 @@
 # SOFTWARE.
 
 from collections import OrderedDict
-import sys, argparse, os, time, pprint, datetime, hashlib, subprocess, io, tarfile, fnmatch, re, csv
+import sys, argparse, os, time, datetime, hashlib, subprocess, io, tarfile, fnmatch, re, csv
 
-dPath=""
+"""
+Global values
+
+dPath -> Directory path used during backup creation
+nBackup -> Path of the new backup 
+iPath -> Absolute path of "info" file withing the zbackup directory structure
+"""
+
+dPath="" 
 nBackup=""
 iPath=""
+
 excludes=[]
 mDict={}
+
 mAge=0
 mAJitter=0
 
-def readCSVManifestFC(fName, aFlags):
+"""
+Read previous backup CSV manifest during the creation of a new backup
+
+Input:
+
+absPath -> Absolute path of the old manifest
+aFlags -> Additional flags to be passed to zbackup
+
+Output:
+
+mDict -> A dictionary with the following key value pair
+
+Key : Value -> filename : [ Modification epoch time, 
+                            Backup epoch time, 
+                            Size, 
+                            Relative path of new backup, 
+                            pFlag -> Values mentioned below,
+                            UID,
+                            GID,
+                            Boolean value to indicate whether its a file or a directory
+                        ]
+
+Note:
+Changing the ownership of a directory doesn't alter its modification time. Thats why we need to keep track of UID and GID as well.    
+
+pFlag values can be 0, 1, 2, 3, 4                         
+After all the processing is done the function printInfo will use this flag value to print the relevant info
+
+0 -> Initialized value
+1 -> Needs to be retained
+2 -> Needs to be stored
+3 -> The element has been modified
+4 -> The element needs to be backed up again
+"""
+def readCSVManifestFC(absPath, aFlags):
     
     mDict={}
 
-    data=readManifestFromBackup(fName, aFlags).decode('utf-8')
+    data=readManifestFromBackup(absPath, aFlags).decode('utf-8')
 
     if not data:
         raise Exception(-1)
@@ -42,18 +86,48 @@ def readCSVManifestFC(fName, aFlags):
     sIO=io.StringIO(data)
     csvReader=csv.reader(sIO, dialect='unix', quoting=csv.QUOTE_MINIMAL)    
 
+    """
+    A row in the backup CSV manifest
+
+    Element Name, 
+    Size, 
+    Modification time in %Y-%m-%dT%H:%M:%S format, 
+    Last backed up time in similar format, 
+    Relative path of the backup from which the file can be extracted from, 
+    UID, 
+    GID,
+    Boolean value to indicate whether its a file or a directory
+    """
+
     for row in csvReader:    
         mDict[row[0]]=[getETFromStr(row[2]), getETFromStr(row[3]), int(row[1]), row[4], 0, int(row[5]), int(row[6]), int(row[7])]                
         
     return mDict 
 
-def readCSVManifestFR(fName, includes, aFlags):
+"""
+Read Associated manifest of the backup to be restored
+
+Input:
+
+absPath -> Absolute path of the backup manifest
+includes -> A list of glob patterns to be restored
+aFlags -> Additional flags to be passed to zbackup
+
+Output:
+
+mDict -> A dictionary with the following key value pair
+Key : Value -> Relative path of the backup : A set of files to be extracted from this backup
+
+isFileMap -> Another dictionary with the following key value pair
+Key : Value -> Name of the element to be restored : A boolean value to indicate whether its a file or a directory
+"""
+def readCSVManifestFR(absPath, includes, aFlags):
 
     mDict={}
     isFileMap={}
     iList=generatePatterns(includes)
 
-    data=readManifestFromBackup(fName, aFlags).decode('utf-8')
+    data=readManifestFromBackup(absPath, aFlags).decode('utf-8')
 
     if not data:
         raise Exception(-1)
@@ -61,13 +135,32 @@ def readCSVManifestFR(fName, includes, aFlags):
     sIO=io.StringIO(data)    
     csvReader=csv.reader(sIO, dialect='unix', quoting=csv.QUOTE_MINIMAL)    
  
-    for row in csvReader: 
+    for row in csvReader:
+
+        """
+        A row in the backup CSV manifest
+
+        Element Name, 
+        Size, 
+        Modification time in %Y-%m-%dT%H:%M:%S format, 
+        Last backed up time in similar format, 
+        Relative path of the backup from which the file can be extracted from, 
+        UID, 
+        GID,
+        Boolean value to indicate whether its a file or a directory
+        """        
     
+        """
+        Element Name        
+        """
         name=row[0]
 
         if not matchPatterns(name, iList):
             continue
 
+        """
+        Relative path of the backup from which the file can be extracted from        
+        """            
         key=row[4]
 
         if not mDict.__contains__(key):
@@ -79,8 +172,28 @@ def readCSVManifestFR(fName, includes, aFlags):
 	    
     return mDict, isFileMap    
 
-def getCSVManifestFromDict(mDict, rDir):     
-        
+"""
+Create an in memory CSV manifest based on the dictionary while creating a new backup and return it
+
+Input:
+
+mDict -> A dictionary with the following key value pair
+
+Key : Value -> filename : [ Modification epoch time, 
+                            Backup epoch time, 
+                            Size, 
+                            Relative path of new backup, 
+                            pFlag -> Values mentioned below,
+                            UID,
+                            GID,
+                            Boolean value to indicate whether its a file or a directory
+                        ]
+
+Output:
+The raw data associated with CSV manifest
+"""
+def getCSVManifestFromDict(mDict):     
+       
     sDict=OrderedDict(sorted(mDict.items()))
 
     sIO=io.StringIO()
@@ -90,7 +203,20 @@ def getCSVManifestFromDict(mDict, rDir):
 
     for k, v in sDict.items():
         
-        if v[4]>0:                               
+        if v[4]>0:       
+
+            """
+            A row in the backup CSV manifest
+
+            Element Name, 
+            Size, 
+            Modification time in %Y-%m-%dT%H:%M:%S format, 
+            Last backed up time in similar format, 
+            Relative path of the backup from which the file can be extracted from, 
+            UID, 
+            GID,
+            Boolean value to indicate whether its a file or a directory
+            """                        
             
             data.append([k, v[2], datetime.datetime.fromtimestamp(v[0]).strftime('%Y-%m-%dT%H:%M:%S'), datetime.datetime.fromtimestamp(v[1]).strftime('%Y-%m-%dT%H:%M:%S'), v[3], v[5], v[6], v[7]])
             
@@ -99,11 +225,24 @@ def getCSVManifestFromDict(mDict, rDir):
 
     csvWriter.writerows(data)
 
-    return sIO.getvalue()              
+    return sIO.getvalue()       
 
-def shouldExtract(fName, v, bFPath, isFileMap):
+"""
+A function to determine whether an element should be extracted or not while restoration
+
+Input:
+
+fName -> Name of the element
+listElements -> List of files to be extracted from this backup
+bFPath -> Associated relative backup path where this element can be found
+isFileMap -> A dictionary to find out whether the element is a file or a directory
+
+Output:
+True/False
+"""           
+def shouldExtract(fName, listElements, bFPath, isFileMap):
     
-    if fName in v:
+    if fName in listElements:
 
         if(isFileMap[fName]):
             print(fName+"\tEXTRACTED from "+bFPath)
@@ -112,14 +251,28 @@ def shouldExtract(fName, v, bFPath, isFileMap):
 
     return False
 
-def extractFilesFromBackup(fName, aFlags, k, v, isFileMap):
+"""
+A function to extract files from a given backup
+
+Input:
+
+absPath -> Absolute path of the backup
+aFlags -> List of flags to be passed to zbackup
+relPath -> Relative path of backup (Obtained from "info" path)
+lElements -> List of elements to be extracted from this backup
+isFileMap -> A dictionary to find out whether a particular element is a file or a directory
+
+Output:
+None
+""" 
+def extractFilesFromBackup(absPath, aFlags, relPath, lElements, isFileMap):
 
     with open(os.devnull, "w") as fnull:
 
         if(aFlags):
-            shellCmd = "zbackup restore "+fName+' '+' '.join(aFlags)+' | cat'
+            shellCmd = "zbackup restore "+absPath+' '+' '.join(aFlags)+' | cat'
         else:
-            shellCmd = "zbackup restore "+fName+' | cat'         
+            shellCmd = "zbackup restore "+absPath+' | cat'         
 
         proc = subprocess.Popen(shellCmd, shell=True, stdout=subprocess.PIPE, stderr=fnull)
 
@@ -131,7 +284,7 @@ def extractFilesFromBackup(fName, aFlags, k, v, isFileMap):
                 if not nextTInfo:
                     break
 
-                if(shouldExtract(nextTInfo.name, v, k, isFileMap)):
+                if(shouldExtract(nextTInfo.name, lElements, relPath, isFileMap)):
                     tar.extract(nextTInfo)
 
                 tar.members=[]
@@ -141,17 +294,27 @@ def extractFilesFromBackup(fName, aFlags, k, v, isFileMap):
         proc.communicate()            
         proc.wait()     
 
+"""
+A function to get the contents of a backup manifest
 
-def readManifestFromBackup(fName, aFlags):
+Input:
+
+absPath -> Absolute path of the backup manifest
+aFlags -> List of flags to be passed to zbackup
+
+Output:
+The raw CSV manifest
+""" 
+def readManifestFromBackup(absPath, aFlags):
 
     with open(os.devnull, "w") as fnull:
 
         retString=bytes()
 
         if(aFlags):
-            shellCmd = "zbackup restore "+fName+' '+' '.join(aFlags)+' | cat'
+            shellCmd = "zbackup restore "+absPath+' '+' '.join(aFlags)+' | cat'
         else:
-            shellCmd = "zbackup restore "+fName+' | cat'	    	
+            shellCmd = "zbackup restore "+absPath+' | cat'	    	
 
         proc = subprocess.Popen(shellCmd, shell=True, stdout=subprocess.PIPE, stderr=fnull)
 
@@ -161,15 +324,28 @@ def readManifestFromBackup(fName, aFlags):
     
     return retString  
 
-def createZBackup(fName, aFlags):
+"""
+A function to create a new backup
+
+The internal filter associated with the tar ("tCFilter") handles most of the stuff
+
+Input:
+
+absPath -> Absolute path of the backup manifest
+aFlags -> List of flags to be passed to zbackup
+
+Output:
+None
+"""     
+def createZBackup(absPath, aFlags):
 
     with open(os.devnull, "w") as fnull:
 
         if(aFlags):
-            cCmd = "zbackup backup "+fName+" "+' '.join(aFlags)
+            cCmd = "zbackup backup "+absPath+" "+' '.join(aFlags)
             proc = subprocess.Popen(cCmd, shell=True, stdin=subprocess.PIPE, stdout=fnull, stderr=fnull)
         else:
-            proc = subprocess.Popen(["zbackup", "backup", fName], stdin=subprocess.PIPE, stdout=fnull, stderr=fnull)          
+            proc = subprocess.Popen(["zbackup", "backup", absPath], stdin=subprocess.PIPE, stdout=fnull, stderr=fnull)          
 
         with tarfile.open(mode="w|", fileobj=proc.stdin) as tar:    
 
@@ -180,27 +356,51 @@ def createZBackup(fName, aFlags):
         proc.communicate()            
         proc.wait()                  
                 
-def createZBackupOfManifest(fName, data, aFlags):  
+"""
+A function to create a new backup manifest
+
+Input:
+
+absPath -> Absolute path of the backup manifest
+data -> Raw CSV data
+aFlags -> List of flags to be passed to zbackup
+
+Output:
+None
+"""                 
+def createZBackupOfManifest(absPath, data, aFlags):  
 
     with open(os.devnull, "w") as fnull:
 
         if(aFlags):
-            cCmd = "zbackup backup "+fName+" "+' '.join(aFlags)
+            cCmd = "zbackup backup "+absPath+" "+' '.join(aFlags)
             proc = subprocess.Popen(cCmd, shell=True, stdin=subprocess.PIPE, stdout=fnull, stderr=fnull)
         else:
-            proc = subprocess.Popen(["zbackup", "backup", fName], stdin=subprocess.PIPE, stdout=fnull, stderr=fnull)	    	
+            proc = subprocess.Popen(["zbackup", "backup", absPath], stdin=subprocess.PIPE, stdout=fnull, stderr=fnull)	    	
 
         proc.stdin.write(data)
                 
         proc.communicate()            
         proc.wait()           
 
+"""
+A function to obtain a list of regular expressions given a list of glob patterns
+
+Input:
+fnPatterns -> List of glob patterns
+
+Output:
+pList -> List of regular expressions
+"""
 def generatePatterns(fnPatterns):
 
     pList=[]
 
     for x in fnPatterns:
 
+        """
+        To excludes all the the elements in the directory as well
+        """
         if x[-1]=='/':
             x=x+'*'
 
@@ -208,6 +408,9 @@ def generatePatterns(fnPatterns):
 
     return pList
 
+"""
+A function to check whether a given string matches against any one of the patterns in our list
+"""
 def matchPatterns(string, pList):
 
     for pattern in pList:
@@ -216,6 +419,15 @@ def matchPatterns(string, pList):
 
     return False                                                
 
+"""
+A TarInfo Filter function used while adding a directory to a tarfile
+
+Input:
+tFinfo -> A TarInfo object
+
+Output:
+A modified TarInfo object/None
+"""
 def tCFilter(tInfo):
 
     tInfo.name='/'+tInfo.name
@@ -236,7 +448,40 @@ def tCFilter(tInfo):
     elif mDict.__contains__(rPath):
         mDict.pop(rPath)		
 
+"""
+Based on the new TarInfo object, makes changes to the global mDict and returns whether it should be included in the tar or not
+
+Input:
+rPath -> This would be the name of this element in the final tar
+tFinfo -> TarInfo object
+
+Output:
+A modified TarInfo object/None
+"""
 def handleNewElement(rPath, tInfo):    
+
+    """
+    mDict -> A dictionary with the following key value pair
+
+    Key : Value -> filename : [ Modification epoch time, 
+                                Backup epoch time, 
+                                Size, 
+                                Relative path of new backup, 
+                                pFlag -> Values mentioned below,
+                                UID,
+                                GID,
+                                Boolean value to indicate whether its a file or a directory
+                            ]  
+                            
+    pFlag values can be 0, 1, 2, 3, 4                         
+    After all the processing is done the function printInfo will use this flag value to print the relevant info
+
+    0 -> Initialized value
+    1 -> Needs to be retained
+    2 -> Needs to be stored
+    3 -> The element has been modified
+    4 -> The element needs to be backed up again                              
+    """
 
     if(mDict.__contains__(rPath)):
         mDict[rPath][4]=1
@@ -272,6 +517,15 @@ def handleNewElement(rPath, tInfo):
     else:    	
         return None
 
+"""
+Create a new backup based on the command line arguments
+
+Input:
+pArgs -> Processed command line arguments
+
+Output:
+Return code -> 0/Relevant error code
+"""
 def handleBackupCreation(pArgs):  
 
     global iPath, mDict, dPath, excludes, nBackup, mAge, mAJitter
@@ -279,7 +533,7 @@ def handleBackupCreation(pArgs):
     if not hBCreationChecks(pArgs):
         return -1
        
-    dPath=pArgs.dPath        
+    dPath=os.path.abspath(pArgs.dPath)        
     
     iPath=getInfoPath(os.path.dirname(os.path.realpath(pArgs.nBackup)))  
     nBackup=pArgs.nBackup
@@ -305,13 +559,22 @@ def handleBackupCreation(pArgs):
     try:
             
         createZBackup(pArgs.nBackup, pArgs.aFlags)                                
-        createZBackupOfManifest(pArgs.nBackup+'.manifest', bytes(getCSVManifestFromDict(mDict, pArgs.dPath), 'UTF-8'), pArgs.aFlags)
+        createZBackupOfManifest(pArgs.nBackup+'.manifest', bytes(getCSVManifestFromDict(mDict), 'UTF-8'), pArgs.aFlags)
                                                                 
         return 0        
         
     except subprocess.CalledProcessError as e:                    
         return e.returncode                    
-    
+
+"""
+Restore a backup based on the command line arguments
+
+Input:
+pArgs -> Processed command line arguments
+
+Output:
+Return -> 0/Relevant error code
+"""    
 def handleBackupRestoration(pArgs):   
 
     if not hBRestorationChecks(pArgs):
@@ -331,6 +594,9 @@ def handleBackupRestoration(pArgs):
 
     return 0                         
 
+"""
+A function that returns the zbackup directory path where the "info" file can be found
+"""
 def getInfoPath(pPath):
         
     if os.path.isfile(os.path.join(pPath, "info")):
@@ -342,6 +608,14 @@ def getInfoPath(pPath):
     else:
         return ""            
 
+"""
+A function print relevant info while creating a new backup
+
+Input:
+
+index -> A flag
+fName -> Filename (The directory info isn't printed out)
+"""
 def printInfo(index, fName):
     
     if index==2:
@@ -352,16 +626,34 @@ def printInfo(index, fName):
         
     elif index==4:
         print(fName+"\tREFRESHED")
-        
+
+"""
+A function that returns relevant epoch time based on a structed DateTime pattern
+"""        
 def getETFromStr(dStr):
     
     pattern = '%Y-%m-%dT%H:%M:%S'
     return int(time.mktime(time.strptime(dStr, pattern)))
 
+"""
+A function that returns the relevant jitter associated with a file name based on max jitter
+"""
 def getRJitter(fName, mAJitter):
             
     return (int(hashlib.sha1(fName.encode('UTF-8')).hexdigest(), 16 ) % (2*mAJitter)) - mAJitter
-    
+
+"""
+A function to determine whether the element should be backed up again
+
+Input:
+mAge -> Max Age
+mAJitter -> Max Age Jitter
+fName -> The relevant element name
+lBTime -> Last backed up epoch time
+
+Output:
+True/False
+"""    
 def shouldBack(mAge, mAJitter, fName, lBTime):
         
     pTime=int(time.time())
@@ -372,7 +664,10 @@ def shouldBack(mAge, mAJitter, fName, lBTime):
         return True
     
     return False
-    
+
+"""
+Run checks on the processed command line arguments provided to create a new backup
+"""    
 def hBCreationChecks(pArgs):
         
     if not os.path.isfile(pArgs.pBackup):
@@ -402,7 +697,10 @@ def hBCreationChecks(pArgs):
         return False
     
     return True      
-    
+
+"""
+Run checks on the processed command line arguments provided to restore a backup
+"""        
 def hBRestorationChecks(pArgs):
         
     if not os.path.isfile(pArgs.backup):    
@@ -415,6 +713,9 @@ def hBRestorationChecks(pArgs):
             
     return True
 
+"""
+A function used to get a command line argument parser which will be used while creating a new backup
+"""
 def getCreateArgsParser():
         
     parser = argparse.ArgumentParser(description='ZBackupTar backup creation')
@@ -444,6 +745,9 @@ def getCreateArgsParser():
     
     return parser
 
+"""
+A function used to get a command line argument parser which will be used while restoring a backup
+"""
 def getRestoreArgsParser():
     
     parser = argparse.ArgumentParser(description='ZBackupTar backup restoration')

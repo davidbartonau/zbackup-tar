@@ -59,7 +59,7 @@ function test1SameDir ()
     rm -rf $TMPDIR/restored/*
 
     zbackup-tar restore --backup $TMPDIR/zbackup/backups/$BACKUPNAME
-    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed" $LOCAL_TODO_BUG
+    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed" 
 
     restoreAndCheck
 
