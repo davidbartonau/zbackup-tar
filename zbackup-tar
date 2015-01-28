@@ -52,8 +52,8 @@ Output:
 
 mDict -> A dictionary with the following key value pair
 
-Key : Value -> filename : [ Modification epoch time, 
-                            Backup epoch time, 
+Key : Value -> filename : [ Element Modification time since epoch in seconds, 
+                            Last Backup time since epoch in seconds, 
                             Size, 
                             Relative path of new backup, 
                             pFlag -> Values mentioned below,
@@ -182,8 +182,8 @@ Input:
 
 mDict -> A dictionary with the following key value pair
 
-Key : Value -> filename : [ Modification epoch time, 
-                            Backup epoch time, 
+Key : Value -> filename : [ Element Modification time since epoch in seconds, 
+                            Last Backup time since epoch in seconds, 
                             Size, 
                             Relative path of new backup, 
                             pFlag -> Values mentioned below,
@@ -405,6 +405,7 @@ def generatePatterns(fnPatterns):
         To excludes all the the elements in the directory as well
         """
         if x[-1] == '/':
+            pList.append(fnmatch.translate(x[:-1])[:-7]+"$")
             x = x+'*'
 
         pList.append(fnmatch.translate(x)[:-7]+"$")
@@ -438,25 +439,17 @@ def tCFilter(tInfo):
     if tInfo.name == dPath:
         tInfo.name = '.'
         return tInfo
-
-    if tInfo.isdir():
-        rPath = getRelativePath(tInfo.name + "/", dPath)
-    else:        
-        rPath = getRelativePath(tInfo.name, dPath)    
+  
+    rPath = getRelativePath(tInfo.name, dPath)    
 
     if not matchPatterns(rPath, excludes):
-
-        if(tInfo.islnk() or tInfo.issym() or tInfo.isfile() ):						
-            return handleNewElement(rPath, tInfo)			
-
-        elif tInfo.isdir():
-            return handleNewElement(rPath[:-1], tInfo)            
+        return handleNewElement(rPath, tInfo)			
 
     elif mDict.__contains__(rPath):
         mDict.pop(rPath)		
 
 """
-Based on the new TarInfo object, make changes to the global mDict and returns whether it should be included in the tar or not
+Based on the new TarInfo object, make changes to the global mDict and return whether it should be included in the tar or not
 
 Input:
 rPath -> This would be the name of this element in the final tar
@@ -470,15 +463,15 @@ def handleNewElement(rPath, tInfo):
     """
     mDict -> A dictionary with the following key value pair
 
-    Key : Value -> filename : [ Modification epoch time, 
-                                Backup epoch time, 
-                                Size, 
-                                Relative path of new backup, 
-                                pFlag -> Values mentioned below,
-                                UID,
-                                GID,
-                                Boolean value to indicate whether its a file or a directory
-                            ]  
+	Key : Value -> filename : [ Element Modification time since epoch in seconds, 
+	                            Last Backup time since epoch in seconds, 
+	                            Size, 
+	                            Relative path of new backup, 
+	                            pFlag -> Values mentioned below,
+	                            UID,
+	                            GID,
+	                            Boolean value to indicate whether its a file or a directory
+	                        ]  
                             
     pFlag values can be 0, 1, 2, 3, 4                         
     After all the processing is done the function printInfo will use this flag value to print the relevant info
@@ -491,13 +484,22 @@ def handleNewElement(rPath, tInfo):
     """
 
     if(mDict.__contains__(rPath)):
+        """
+        Retained
+        """
         mDict[rPath][4] = 1
 
     if (not mDict.__contains__(rPath)) or (tInfo.mtime-mDict[rPath][0])>1 or mDict[rPath][5]!=tInfo.uid or mDict[rPath][6]!=tInfo.gid:
         
         if not mDict.__contains__(rPath):
+            """
+            Stored
+            """
             val = 2
-        else:                 
+        else:
+            """
+            Modified
+            """                 
             val = 3        
           
         if(tInfo.isdir()):
@@ -513,7 +515,10 @@ def handleNewElement(rPath, tInfo):
         if shouldBack(mAge*3600, mAJitter*3600, rPath, mDict[rPath][1]):
             
             mDict[rPath][1] = int(time.time())            
-            mDict[rPath][3] = getRelativePath(nBackup, iPath)            
+            mDict[rPath][3] = getRelativePath(nBackup, iPath)   
+            """
+            Refreshed
+            """                      
             mDict[rPath][4] = 4                               
 
             tInfo.name = rPath
@@ -525,7 +530,7 @@ def handleNewElement(rPath, tInfo):
         return None
 
 """
-Create a new backup based on the command line arguments
+Create a new backup based on the processed command line arguments
 
 Input:
 pArgs -> Processed command line arguments
@@ -577,7 +582,7 @@ def handleBackupCreation(pArgs):
         return e.returncode                    
 
 """
-Restore a backup based on the command line arguments
+Restore a backup based on the processed command line arguments
 
 Input:
 pArgs -> Processed command line arguments
@@ -620,7 +625,7 @@ def getInfoPath(pPath):
         return ""            
 
 """
-A function print relevant info while creating a new backup
+A function to print relevant info while creating a new backup
 
 Input:
 
@@ -666,17 +671,17 @@ A function to determine whether the element should be backed up again
 Input:
 mAge -> Max Age
 mAJitter -> Max Age Jitter
-fName -> The relevant element name
+eName -> The relevant element name
 lBTime -> Last backed up epoch time
 
 Output:
 True/False
 """    
-def shouldBack(mAge, mAJitter, fName, lBTime):
+def shouldBack(mAge, mAJitter, eName, lBTime):
         
     pTime = int(time.time())
                             
-    mASeconds = mAge + getRJitter(fName, int(mAJitter))
+    mASeconds = mAge + getRJitter(eName, int(mAJitter))
     
     if (pTime - lBTime) > mASeconds:
         return True
