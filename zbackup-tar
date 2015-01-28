@@ -432,10 +432,14 @@ def tCFilter(tInfo):
 
     tInfo.name='/'+tInfo.name
 
-    rPath=os.path.relpath(tInfo.name, dPath)
+    if tInfo.name==dPath:
+        tInfo.name='.'
+        return tInfo
 
     if tInfo.isdir():
-        rPath=rPath+'/'
+        rPath=getRelativePath(tInfo.name+"/", dPath)
+    else:        
+        rPath=getRelativePath(tInfo.name, dPath)    
 
     if not matchPatterns(rPath, excludes):
 
@@ -494,9 +498,9 @@ def handleNewElement(rPath, tInfo):
             val=3        
           
         if(tInfo.isdir()):
-            mDict[rPath]=[tInfo.mtime, int(time.time()), tInfo.size, os.path.relpath(os.path.realpath(nBackup), iPath), val, tInfo.uid, tInfo.gid, 0]                    
+            mDict[rPath]=[tInfo.mtime, int(time.time()), tInfo.size, getRelativePath(nBackup, iPath), val, tInfo.uid, tInfo.gid, 0]                    
         else:    
-            mDict[rPath]=[tInfo.mtime, int(time.time()), tInfo.size, os.path.relpath(os.path.realpath(nBackup), iPath), val, tInfo.uid, tInfo.gid, 1]                            	
+            mDict[rPath]=[tInfo.mtime, int(time.time()), tInfo.size, getRelativePath(nBackup, iPath), val, tInfo.uid, tInfo.gid, 1]                            	
         
         tInfo.name=rPath
         return tInfo
@@ -506,7 +510,7 @@ def handleNewElement(rPath, tInfo):
         if shouldBack(mAge*3600, mAJitter*3600, rPath, mDict[rPath][1]):
             
             mDict[rPath][1]=int(time.time())            
-            mDict[rPath][3]=os.path.relpath(os.path.realpath(nBackup), iPath)            
+            mDict[rPath][3]=getRelativePath(nBackup, iPath)            
             mDict[rPath][4]=4                               
 
             tInfo.name=rPath
@@ -528,18 +532,21 @@ Return code -> 0/Relevant error code
 """
 def handleBackupCreation(pArgs):  
 
+    """
+    Necessary in order to make changes to global variables
+    """
     global iPath, mDict, dPath, excludes, nBackup, mAge, mAJitter
     
     if not hBCreationChecks(pArgs):
         return -1
        
-    dPath=os.path.abspath(pArgs.dPath)        
+    dPath = os.path.abspath(pArgs.dPath)+"/"        
+    nBackup = os.path.realpath(pArgs.nBackup)    
     
-    iPath=getInfoPath(os.path.dirname(os.path.realpath(pArgs.nBackup)))  
-    nBackup=pArgs.nBackup
-    mAge=pArgs.mAge
-    mAJitter=pArgs.mAJitter     
-    
+    iPath = getInfoPath(os.path.dirname(nBackup))      
+    mAge = pArgs.mAge
+    mAJitter = pArgs.mAJitter 
+
     if pArgs.pBackup:
                 
         try:
@@ -558,8 +565,8 @@ def handleBackupCreation(pArgs):
     
     try:
             
-        createZBackup(pArgs.nBackup, pArgs.aFlags)                                
-        createZBackupOfManifest(pArgs.nBackup+'.manifest', bytes(getCSVManifestFromDict(mDict), 'UTF-8'), pArgs.aFlags)
+        createZBackup(nBackup, pArgs.aFlags)                                
+        createZBackupOfManifest(nBackup+'.manifest', bytes(getCSVManifestFromDict(mDict), 'UTF-8'), pArgs.aFlags)
                                                                 
         return 0        
         
@@ -580,11 +587,12 @@ def handleBackupRestoration(pArgs):
     if not hBRestorationChecks(pArgs):
         return -1
     
-    iPath = getInfoPath(pArgs.backup)
+    bPath = os.path.realpath(pArgs.backup)
+    iPath = getInfoPath(bPath)
     
     try:
         
-        mDict, isFileMap=readCSVManifestFR(pArgs.backup+'.manifest', pArgs.includes, pArgs.aFlags)
+        mDict, isFileMap=readCSVManifestFR(bPath+'.manifest', pArgs.includes, pArgs.aFlags)
 
         for k, v in mDict.items():
             extractFilesFromBackup(os.path.join(iPath, k), pArgs.aFlags, k, v, isFileMap)                    
@@ -600,7 +608,7 @@ A function that returns the zbackup directory path where the "info" file can be 
 def getInfoPath(pPath):
         
     if os.path.isfile(os.path.join(pPath, "info")):
-        return pPath
+        return pPath+"/"
     
     elif os.path.dirname(pPath)!=pPath:
         return getInfoPath(os.path.dirname(pPath))
@@ -634,6 +642,13 @@ def getETFromStr(dStr):
     
     pattern = '%Y-%m-%dT%H:%M:%S'
     return int(time.mktime(time.strptime(dStr, pattern)))
+
+"""
+A function that returns relative path of the first string with respect to the other instead of using os.path.relpath
+"""
+def getRelativePath(fullPath, pathToBeSubtracted):
+
+    return fullPath.replace(pathToBeSubtracted,"")    
 
 """
 A function that returns the relevant jitter associated with a file name based on max jitter
