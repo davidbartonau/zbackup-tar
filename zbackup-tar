@@ -40,6 +40,8 @@ mDict = {}
 mAge = 0
 mAJitter = 0
 
+DEBUG = 0
+
 """
 Read previous backup CSV manifest during the creation of a new backup
 
@@ -91,8 +93,8 @@ def readCSVManifestFC(absPath, aFlags):
 
     Element Name, 
     Size, 
-    Modification time in %Y-%m-%dT%H:%M:%S format, 
-    Last backed up time in similar format, 
+    Element Modification time since epoch in seconds, 
+    Last Backup time since epoch in seconds,  
     Relative path of the backup from which the file can be extracted from, 
     UID, 
     GID,
@@ -100,7 +102,7 @@ def readCSVManifestFC(absPath, aFlags):
     """
 
     for row in csvReader:    
-        mDict[row[0]]=[getETFromStr(row[2]), getETFromStr(row[3]), int(row[1]), row[4], 0, int(row[5]), int(row[6]), int(row[7])]                
+        mDict[row[0]]=[int(row[2]), int(row[3]), int(row[1]), row[4], 0, int(row[5]), int(row[6]), int(row[7])]                
         
     return mDict 
 
@@ -142,8 +144,8 @@ def readCSVManifestFR(absPath, includes, aFlags):
 
         Element Name, 
         Size, 
-        Modification time in %Y-%m-%dT%H:%M:%S format, 
-        Last backed up time in similar format, 
+        Element Modification time since epoch in seconds, 
+        Last Backup time since epoch in seconds,  
         Relative path of the backup from which the file can be extracted from, 
         UID, 
         GID,
@@ -213,15 +215,15 @@ def getCSVManifestFromDict(mDict):
 
             Element Name, 
             Size, 
-            Modification time in %Y-%m-%dT%H:%M:%S format, 
-            Last backed up time in similar format, 
+            Element Modification time since epoch in seconds, 
+            Last Backup time since epoch in seconds,  
             Relative path of the backup from which the file can be extracted from, 
             UID, 
             GID,
             Boolean value to indicate whether its a file or a directory
             """                        
             
-            data.append([k, v[2], datetime.datetime.fromtimestamp(v[0]).strftime('%Y-%m-%dT%H:%M:%S'), datetime.datetime.fromtimestamp(v[1]).strftime('%Y-%m-%dT%H:%M:%S'), v[3], v[5], v[6], v[7]])
+            data.append([k, v[2], v[0], v[1], v[3], v[5], v[6], v[7]])
             
             if v[7]:
                 printInfo(v[4], k)                    
@@ -489,7 +491,7 @@ def handleNewElement(rPath, tInfo):
         """
         mDict[rPath][4] = 1
 
-    if (not mDict.__contains__(rPath)) or (tInfo.mtime-mDict[rPath][0])>1 or mDict[rPath][5]!=tInfo.uid or mDict[rPath][6]!=tInfo.gid:
+    if (not mDict.__contains__(rPath)) or (int(tInfo.mtime) > mDict[rPath][0]) or mDict[rPath][5]!=tInfo.uid or mDict[rPath][6]!=tInfo.gid:
         
         if not mDict.__contains__(rPath):
             """
@@ -503,9 +505,9 @@ def handleNewElement(rPath, tInfo):
             val = 3        
           
         if(tInfo.isdir()):
-            mDict[rPath] = [tInfo.mtime, int(time.time()), tInfo.size, getRelativePath(nBackup, iPath), val, tInfo.uid, tInfo.gid, 0]                    
+            mDict[rPath] = [int(tInfo.mtime), int(time.time()), tInfo.size, getRelativePath(nBackup, iPath), val, tInfo.uid, tInfo.gid, 0]                    
         else:    
-            mDict[rPath] = [tInfo.mtime, int(time.time()), tInfo.size, getRelativePath(nBackup, iPath), val, tInfo.uid, tInfo.gid, 1]                            	
+            mDict[rPath] = [int(tInfo.mtime), int(time.time()), tInfo.size, getRelativePath(nBackup, iPath), val, tInfo.uid, tInfo.gid, 1]                            	
         
         tInfo.name = rPath
         return tInfo
@@ -642,14 +644,6 @@ def printInfo(index, fName):
         
     elif index == 4:
         print(fName+"\tREFRESHED")
-
-"""
-A function that returns relevant epoch time based on a structed DateTime pattern
-"""        
-def getETFromStr(dStr):
-    
-    pattern = '%Y-%m-%dT%H:%M:%S'
-    return int(time.mktime(time.strptime(dStr, pattern)))
 
 """
 A function that returns relative path of the first string with respect to the other instead of using os.path.relpath
