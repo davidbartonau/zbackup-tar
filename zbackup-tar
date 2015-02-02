@@ -282,9 +282,9 @@ def extractFilesFromBackup(absPath, aFlags, relPath, lElements, isFileMap):
     with open(os.devnull, "w") as fnull:
 
         if(aFlags):
-            shellCmd = "zbackup restore "+absPath+' '+' '.join(aFlags)+' | cat'
+            shellCmd = "zbackup restore --silent "+absPath+' '+' '.join(aFlags)+' | cat'
         else:
-            shellCmd = "zbackup restore "+absPath+' | cat'         
+            shellCmd = "zbackup restore --silent "+absPath+' | cat'         
 
         proc = subprocess.Popen(shellCmd, shell = True, stdout = subprocess.PIPE, stderr = fnull)
 
@@ -326,9 +326,9 @@ def readManifestFromBackup(absPath, aFlags):
         retString=bytes()
 
         if(aFlags):
-            shellCmd = "zbackup restore "+absPath+' '+' '.join(aFlags)+' | cat'
+            shellCmd = "zbackup restore --silent "+absPath+' '+' '.join(aFlags)+' | cat'
         else:
-            shellCmd = "zbackup restore "+absPath+' | cat'	    	
+            shellCmd = "zbackup restore --silent "+absPath+' | cat'	    	
 
         proc = subprocess.Popen(shellCmd, shell = True, stdout = subprocess.PIPE, stderr = fnull)
 
@@ -358,10 +358,10 @@ def createZBackup(absPath, aFlags):
     with open(os.devnull, "w") as fnull:
 
         if(aFlags):
-            cCmd = "zbackup backup "+absPath+" "+' '.join(aFlags)
-            proc = subprocess.Popen(cCmd, shell = True, stdin = subprocess.PIPE, stdout = fnull, stderr = fnull)
+            cCmd = "zbackup backup --silent "+absPath+" "+' '.join(aFlags)
+            proc = subprocess.Popen(cCmd, shell = True, stdin = subprocess.PIPE, stdout = fnull)
         else:
-            proc = subprocess.Popen(["zbackup", "backup", absPath], stdin = subprocess.PIPE, stdout = fnull, stderr = fnull)          
+            proc = subprocess.Popen(["zbackup", "backup", "--silent", absPath], stdin = subprocess.PIPE, stdout = fnull)          
 
         with tarfile.open(mode = "w|", fileobj = proc.stdin) as tar:    
 
@@ -391,10 +391,10 @@ def createZBackupOfManifest(absPath, data, aFlags):
     with open(os.devnull, "w") as fnull:
 
         if(aFlags):
-            cCmd = "zbackup backup "+absPath+" "+' '.join(aFlags)
+            cCmd = "zbackup backup --silent "+absPath+" "+' '.join(aFlags)
             proc = subprocess.Popen(cCmd, shell = True, stdin = subprocess.PIPE, stdout = fnull, stderr = fnull)
         else:
-            proc = subprocess.Popen(["zbackup", "backup", absPath], stdin = subprocess.PIPE, stdout = fnull, stderr = fnull)	    	
+            proc = subprocess.Popen(["zbackup", "backup", "--silent", absPath], stdin = subprocess.PIPE, stdout = fnull, stderr = fnull)	    	
 
         proc.stdin.write(data)
                 
