@@ -42,6 +42,8 @@ mAJitter = 0
 
 DEBUG = 0
 
+
+
 """
 Read previous backup CSV manifest during the creation of a new backup
 
@@ -105,6 +107,8 @@ def readCSVManifestFC(absPath, aFlags):
         mDict[row[0]]=[int(row[2]), int(row[3]), int(row[1]), row[4], 0, int(row[5]), int(row[6]), int(row[7])]                
         
     return mDict 
+
+
 
 """
 Read Associated manifest of the backup to be restored
@@ -177,6 +181,8 @@ def readCSVManifestFR(absPath, includes, aFlags):
 	    
     return mDict, isFileMap    
 
+
+
 """
 Create an in memory CSV manifest based on the dictionary while creating a new backup and return it
 
@@ -224,13 +230,12 @@ def getCSVManifestFromDict(mDict):
             """                        
             
             data.append([k, v[2], v[0], v[1], v[3], v[5], v[6], v[7]])
-            
-            if v[7]:
-                printInfo(v[4], k)                    
 
     csvWriter.writerows(data)
 
     return sIO.getvalue()       
+
+
 
 """
 A function to determine whether an element should be extracted or not while restoration
@@ -255,6 +260,8 @@ def shouldExtract(eName, listElements, bFPath, isFileMap):
         return True
 
     return False
+
+
 
 """
 A function to extract files from a given backup
@@ -299,6 +306,8 @@ def extractFilesFromBackup(absPath, aFlags, relPath, lElements, isFileMap):
         proc.communicate()            
         proc.wait()     
 
+
+
 """
 A function to get the contents of a backup manifest
 
@@ -328,6 +337,8 @@ def readManifestFromBackup(absPath, aFlags):
         proc.wait()    
     
     return retString  
+
+
 
 """
 A function to create a new backup
@@ -361,6 +372,8 @@ def createZBackup(absPath, aFlags):
         proc.communicate()            
         proc.wait()                  
                 
+
+
 """
 A function to create a new backup manifest
 
@@ -388,6 +401,8 @@ def createZBackupOfManifest(absPath, data, aFlags):
         proc.communicate()            
         proc.wait()           
 
+
+
 """
 A function to obtain a list of regular expressions given a list of glob patterns
 
@@ -414,6 +429,8 @@ def generatePatterns(fnPatterns):
 
     return pList
 
+
+
 """
 A function to check whether a given string matches against any one of the patterns in our list
 """
@@ -424,6 +441,8 @@ def matchPatterns(string, pList):
             return True
 
     return False                                                
+
+
 
 """
 A TarInfo Filter function used while adding a directory to a tarfile
@@ -445,10 +464,17 @@ def tCFilter(tInfo):
     rPath = getRelativePath(tInfo.name, dPath)    
 
     if not matchPatterns(rPath, excludes):
-        return handleNewElement(rPath, tInfo)			
+        result = handleNewElement(rPath, tInfo)			
+        v = mDict[rPath]
 
+        if v[4] > 0 and v[7]:
+            printInfo(v[4], rPath)                    
+
+        return result
     elif mDict.__contains__(rPath):
         mDict.pop(rPath)		
+
+
 
 """
 Based on the new TarInfo object, make changes to the global mDict and return whether it should be included in the tar or not
@@ -531,6 +557,8 @@ def handleNewElement(rPath, tInfo):
     else:    	
         return None
 
+
+
 """
 Create a new backup based on the processed command line arguments
 
@@ -583,6 +611,8 @@ def handleBackupCreation(pArgs):
     except subprocess.CalledProcessError as e:                    
         return e.returncode                    
 
+
+
 """
 Restore a backup based on the processed command line arguments
 
@@ -612,6 +642,8 @@ def handleBackupRestoration(pArgs):
 
     return 0                         
 
+
+
 """
 A function that returns the zbackup directory path where the "info" file can be found
 """
@@ -625,6 +657,8 @@ def getInfoPath(pPath):
     
     else:
         return ""            
+
+
 
 """
 A function to print relevant info while creating a new backup
@@ -645,6 +679,8 @@ def printInfo(index, fName):
     elif index == 4:
         print(fName+"\tREFRESHED")
 
+
+
 """
 A function that returns relative path of the first string with respect to the other instead of using os.path.relpath
 """
@@ -652,12 +688,16 @@ def getRelativePath(fullPath, pathToBeSubtracted):
 
     return fullPath.replace(pathToBeSubtracted,"")    
 
+
+
 """
 A function that returns the relevant jitter associated with a file name based on max jitter
 """
 def getRJitter(fName, mAJitter):
             
     return (int(hashlib.sha1(fName.encode('UTF-8')).hexdigest(), 16 ) % (2*mAJitter)) - mAJitter
+
+
 
 """
 A function to determine whether the element should be backed up again
@@ -681,6 +721,8 @@ def shouldBack(mAge, mAJitter, eName, lBTime):
         return True
     
     return False
+
+
 
 """
 Run checks on the processed command line arguments provided to create a new backup
@@ -715,6 +757,8 @@ def hBCreationChecks(pArgs):
     
     return True      
 
+
+
 """
 Run checks on the processed command line arguments provided to restore a backup
 """        
@@ -729,6 +773,8 @@ def hBRestorationChecks(pArgs):
         return False            
             
     return True
+
+
 
 """
 A function used to get a command line argument parser which will be used while creating a new backup
@@ -762,6 +808,8 @@ def getCreateArgsParser():
     
     return parser
 
+
+
 """
 A function used to get a command line argument parser which will be used while restoring a backup
 """
@@ -782,6 +830,8 @@ def getRestoreArgsParser():
     	help = 'Restore the file structure from DIRPATH onwards using the backups')                                      
     
     return parser
+
+
 
 def main():  
     
