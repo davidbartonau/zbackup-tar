@@ -1,9 +1,8 @@
 TMPDIR=/tmp/zbackup-tar/
-TESTDATA=$1
 TODO_BUG=1
 
-echo TESTDATA $TESTDATA
-source $TESTDATA/../test_Functions.sh
+echo TESTDATA $TESTDATA :: FUNCTIONROOT $FUNCTIONROOT
+source $FUNCTIONROOT/test_Functions.sh
 
 
 chown -R $TESTDATA/folder1/subfolder2

@@ -56,7 +56,7 @@ function backupAndRestoreDir ()
     fi
     
     echo PREVBACKUP $PREVBACKUP NEWBACKUP $TMPDIR/zbackup/backups/$BACKUPNAME
-    zbackup-tar create --previousBackup "$PREVBACKUP" --newBackup $TMPDIR/zbackup/backups/$BACKUPNAME --maxAge 0.03 --maxAgeJitter 0.02 $TESTDATA/
+    zbackup-tar create --previousBackup "$PREVBACKUP" --newBackup $TMPDIR/zbackup/backups/$BACKUPNAME --refreshCycles $REFRESHCYCLES $TESTDATA/
     checkForSuccess "SUCCESS $BACKUPNAME backed up" "FAIL zbackup-tar failed" $LOCAL_TODO_BUG
 
     restoreAndCheck $LOCAL_TODO_BUG

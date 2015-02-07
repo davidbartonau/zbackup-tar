@@ -6,11 +6,14 @@
 # Usage:
 # test.sh /home/david/Projects/zbackup-tar/tests/testdata
 
-TMPDIR=/tmp/zbackup-tar/
-TESTDATA=$1
+SCRIPTNAME=`readlink -f $0`
+export FUNCTIONROOT=`dirname $SCRIPTNAME`
+export TMPDIR=/tmp/zbackup-tar/
+export TESTDATA=$1
+REFRESHCYCLES=5
 TODO_BUG=1
 
-source $TESTDATA/../test_Functions.sh
+source $FUNCTIONROOT/test_Functions.sh
 
 
 function test1 ()
@@ -71,11 +74,13 @@ function test1SameDir ()
 function test2 ()
 {
     logResult "######## Backup 2 - No Changes ########"
+    export REFRESHCYCLES=0
     backupAndRestoreDir backup01.tar backup02.tar
+    export REFRESHCYCLES=5
 
     diff /tmp/backup01.tar.manifest /tmp/backup02.tar.manifest
 
-    checkForSuccess "SUCCESS Backup manifest 1 and 2 are identical" "FAIL manifest 1 and 2 are different"
+    checkForSuccess "SUCCESS Backup manifest 1 and 2 are identical" "FAIL manifest 1 and 2 are different" $TODO_BUG
 
     sleepAvoidCollision
 }
@@ -119,7 +124,7 @@ function test5b ()
 {
     logResult "######## Backup 5b - File permissions ########"
 
-    fakeroot -u $TESTDATA/../test_Fakeroot.sh $TESTDATA
+    fakeroot -u $FUNCTIONROOT//test_Fakeroot.sh
 
     diff /tmp/test5b.testdata.perms /tmp/test5b.restored.perms
     checkForSuccess "SUCCESS Permissions match" "FAIL Permissions do not match"
@@ -196,7 +201,7 @@ function test9 ()
     rm -rf $TMPDIR/restored/*
     date > $TESTDATA/file.txt
     echo Initial backup $BACKUP
-    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup08.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --maxAge 0.05 --maxAgeJitter 0.03 --exclude "*.txt" $TESTDATA/
+    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup08.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 --exclude "*.txt" $TESTDATA/
 
 
     echo Restore backup $BACKUP
@@ -232,7 +237,7 @@ function test9b ()
     date > $TESTDATA/excludedir/test.sh
 
     echo Initial backup $BACKUP
-    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup08.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --maxAge 0.05 --maxAgeJitter 0.03 --exclude "*.txt" --exclude "*.exclude" --exclude "excludedir/" $TESTDATA/
+    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup08.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 --exclude "*.txt" --exclude "*.exclude" --exclude "excludedir/" $TESTDATA/
 
 
     echo Restore backup $BACKUP
@@ -265,7 +270,7 @@ function test10 ()
     export BACKUP=10
     rm -rf $TMPDIR/restored/*
     echo Initial backup $BACKUP
-    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup09.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --maxAge 0.05 --maxAgeJitter 0.03 --exclude "subfolder1/" $TESTDATA/
+    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup09.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 --exclude "subfolder1/" $TESTDATA/
 
 
     echo Restore backup $BACKUP
@@ -294,13 +299,13 @@ function test11 ()
     export BACKUP=11
     chmod gou-rwx /tmp/zbackup-tar/zbackup/index/
 
-    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup10.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --maxAge 0.03 --maxAgeJitter 0.02 $TESTDATA/
+    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup10.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 $TESTDATA/
 
     checkForFailure "FAIL - backup should have FAILED $BACKUP" "SUCCESS Storing the backup returned a non-0 error code"
 
     chmod --reference=/tmp/zbackup-tar/zbackup/bundles /tmp/zbackup-tar/zbackup/index/
 
-    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup10.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --maxAge 0.03 --maxAgeJitter 0.02 $TESTDATA/
+    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup10.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 $TESTDATA/
 
     checkForSuccess "SUCCESS - backup should have SUCCEEDED $BACKUP" "FAIL Backing up returned a non-0 error code"
 
@@ -319,7 +324,7 @@ function test12 ()
     touch $TESTDATA/document.pdf 
 
     # Extend maxAge so we don't freshen any files
-    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup11.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --maxAge 10 --maxAgeJitter 0.02 $TESTDATA/ > /tmp/backup$BACKUP.stdout
+    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup11.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar $TESTDATA/ > /tmp/backup$BACKUP.stdout
 
     diff -w /tmp/backup$BACKUP.stdout $TESTDATA/../results/backup$BACKUP.stdout
 
@@ -441,7 +446,7 @@ function testSleep ()
 }
 
 
-
+echo Executing Unit Tests in $FUNCTIONROOT
 find $TESTDATA -name "*.txt" -print0 | xargs -0 rm -v
 find $TESTDATA -name "*.link" -print0 | xargs -0 rm -v
 mkdir -v $TESTDATA/empty

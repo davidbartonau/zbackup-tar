@@ -37,10 +37,32 @@ iPath = ""
 excludes = []
 mDict = {}
 
-mAge = 0
-mAJitter = 0
+refreshCycles = 0
+currentCycle = 1
 
-DEBUG = 0
+
+DEBUG = False
+
+
+
+"""
+Read the header of a CSV
+    First Row is Header
+        Literal HEADER
+        Version Number
+        Backup Cycle
+"""
+def readCSVHeader (row):
+    global currentCycle
+
+    header = row[0]
+
+    if header  != "HEADER":
+        raise Exception("First line of manifest is not HEADER")
+
+    versionNumber = int(row[1])
+    currentCycle = int(row[2]) + 1
+    DEBUG and print ("Version Number: ", versionNumber, " ", currentCycle)
 
 
 
@@ -91,20 +113,26 @@ def readCSVManifestFC(absPath, aFlags):
     csvReader = csv.reader(sIO, dialect = 'unix', quoting = csv.QUOTE_MINIMAL)    
 
     """
-    A row in the backup CSV manifest
 
-    Element Name, 
-    Size, 
-    Element Modification time since epoch in seconds, 
-    Last Backup time since epoch in seconds,  
-    Relative path of the backup from which the file can be extracted from, 
-    UID, 
-    GID,
-    Boolean value to indicate whether its a file or a directory
+    A row in the backup CSV manifest
+        Element Name, 
+        Size, 
+        Element Modification time since epoch in seconds, 
+        Last Backup time since epoch in seconds,  
+        Relative path of the backup from which the file can be extracted from, 
+        UID, 
+        GID,
+        Boolean value to indicate whether its a file or a directory
     """
 
+    firstRow = True
+
     for row in csvReader:    
-        mDict[row[0]]=[int(row[2]), int(row[3]), int(row[1]), row[4], 0, int(row[5]), int(row[6]), int(row[7])]                
+        if firstRow:
+            readCSVHeader (row)
+            firstRow = False
+        else:
+            mDict[row[0]]=[int(row[2]), int(row[3]), int(row[1]), row[4], 0, int(row[5]), int(row[6]), int(row[7])]                
         
     return mDict 
 
@@ -141,11 +169,8 @@ def readCSVManifestFR(absPath, includes, aFlags):
     sIO = io.StringIO(data)    
     csvReader = csv.reader(sIO, dialect = 'unix', quoting = csv.QUOTE_MINIMAL)    
  
-    for row in csvReader:
-
-        """
-        A row in the backup CSV manifest
-
+    """
+    A row in the backup CSV manifest
         Element Name, 
         Size, 
         Element Modification time since epoch in seconds, 
@@ -154,30 +179,36 @@ def readCSVManifestFR(absPath, includes, aFlags):
         UID, 
         GID,
         Boolean value to indicate whether its a file or a directory
-        """        
-    
-        """
-        Element Name        
-        """
-        name = row[0]
+    """        
+    firstRow = True
 
-        if not matchPatterns(name, iList):
-            continue
+    for row in csvReader:
+        if firstRow:
+            readCSVHeader (row)
+            firstRow = False
+        else:
+            """
+            Element Name        
+            """
+            name = row[0]
 
-        """
-        Relative path of the backup from which the file can be extracted from        
-        """            
-        key = row[4]
+            if not matchPatterns(name, iList):
+                continue
 
-        if not mDict.__contains__(key):
-            mDict[key] = set()
+            """
+            Relative path of the backup from which the file can be extracted from        
+            """            
+            key = row[4]
 
-        mDict[key].add(name)
+            if not mDict.__contains__(key):
+                mDict[key] = set()
 
-        """
-        Boolean value to indicate whether its a file or a directory
-        """ 
-        isFileMap[name] = int(row[7])				
+            mDict[key].add(name)
+
+            """
+            Boolean value to indicate whether its a file or a directory
+            """ 
+            isFileMap[name] = int(row[7])				
 	    
     return mDict, isFileMap    
 
@@ -211,6 +242,7 @@ def getCSVManifestFromDict(mDict):
     csvWriter = csv.writer(sIO, dialect = 'unix', quoting = csv.QUOTE_MINIMAL)
 
     data = []
+    data.append (["HEADER", 1, currentCycle])
 
     for k, v in sDict.items():
         
@@ -538,9 +570,9 @@ def handleNewElement(rPath, tInfo):
         tInfo.name = rPath
         return tInfo
 
-    elif mAge: 
+    elif refreshCycles: 
          
-        if shouldBack(mAge*3600, mAJitter*3600, rPath, mDict[rPath][1]):
+        if shouldBack(currentCycle, rPath, mDict[rPath][1]):
             
             mDict[rPath][1] = int(time.time())            
             mDict[rPath][3] = getRelativePath(nBackup, iPath)   
@@ -573,7 +605,7 @@ def handleBackupCreation(pArgs):
     """
     Necessary in order to make changes to global variables
     """
-    global iPath, mDict, dPath, excludes, nBackup, mAge, mAJitter
+    global iPath, mDict, dPath, excludes, nBackup, refreshCycles
     
     if not hBCreationChecks(pArgs):
         return -1
@@ -582,8 +614,7 @@ def handleBackupCreation(pArgs):
     nBackup = os.path.realpath(pArgs.nBackup)    
     
     iPath = getInfoPath(os.path.dirname(nBackup))      
-    mAge = pArgs.mAge
-    mAJitter = pArgs.mAJitter 
+    refreshCycles = pArgs.refreshCycles
 
     if pArgs.pBackup:
                 
@@ -690,37 +721,35 @@ def getRelativePath(fullPath, pathToBeSubtracted):
 
 
 
-"""
-A function that returns the relevant jitter associated with a file name based on max jitter
-"""
-def getRJitter(fName, mAJitter):
-            
-    return (int(hashlib.sha1(fName.encode('UTF-8')).hexdigest(), 16 ) % (2*mAJitter)) - mAJitter
-
-
 
 """
 A function to determine whether the element should be backed up again
 
+The backup cycle increases by one each backup to trace the lineage.  Each file has a pseudo-random cycle assigned out of refreshCycles
+
+When the backup cycle hist that number, the file is refreshed.  So all files in cycle 3 will tend to be backed up together.
+
+This overcomes a limitation where small files will not be deduped if they are not backed up next to the same file.
+
 Input:
-mAge -> Max Age
-mAJitter -> Max Age Jitter
+currentCycle -> Current backup cycle
 eName -> The relevant element name
 lBTime -> Last backed up epoch time
 
 Output:
 True/False
 """    
-def shouldBack(mAge, mAJitter, eName, lBTime):
-        
-    pTime = int(time.time())
-                            
-    mASeconds = mAge + getRJitter(eName, int(mAJitter))
-    
-    if (pTime - lBTime) > mASeconds:
+def shouldBack(currentCycle, eName, lBTime):
+    currentRefreshCycle = currentCycle % refreshCycles
+    fileRefreshCycle = (int(hashlib.sha1(eName.encode('UTF-8')).hexdigest(), 16 ) % refreshCycles)
+
+    DEBUG and print ("shouldBack ", eName, " currentCycle:", currentCycle, " refreshCycles:", refreshCycles, " fileRefreshCycle:", fileRefreshCycle);
+
+    if currentRefreshCycle == fileRefreshCycle:
         return True
-    
-    return False
+    else:
+        return False
+
 
 
 
@@ -750,10 +779,6 @@ def hBCreationChecks(pArgs):
     if(fExtension != '.tar'):        
         print('The file extension of the new backup should be \'tar\'')
         return False 
-    
-    if (pArgs.mAge and (not pArgs.mAJitter)) or ((not pArgs.mAge) and pArgs.mAJitter):
-        print('The --maxAgeJitter argument should be used in conjunction with --maxAge')
-        return False
     
     return True      
 
@@ -797,11 +822,8 @@ def getCreateArgsParser():
     parser.add_argument('--exclude', dest = 'excludes', action = 'append', metavar = 'EFiles',  
         help = 'Files to be excluded from the backup')
     
-    parser.add_argument('--maxAge', dest = 'mAge', metavar = 'MAXAGE', type = float,
-        help = 'Refresh any file older than this in the manifest')   
-    
-    parser.add_argument('--maxAgeJitter', dest = 'mAJitter', metavar = 'AGEJITTER', type = float, 
-        help = 'Jitter bound to be used in conjunction with maxAge')
+    parser.add_argument('--refreshCycles', dest = 'refreshCycles', metavar = 'REFRESHCYCLES', type = float,
+        help = 'Refresh files every N backup cycle')   
     
     parser.add_argument('dPath', metavar = 'DIRPATH', type = str,
         help = 'Path of the directory with the files to be backed up' )     
