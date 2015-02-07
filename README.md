@@ -16,15 +16,15 @@ Assuming the /big/files directory hasn't changed much, the marginal size used by
 zbackup-tar is a *very relaxed* incremental tarring tool.  Very relaxed means that the cost of tarring a file we don't need is very low (since it will be deduplicated) so we can tar files we don't strictly need, so long as we never miss tarring a file we do need.
 
 #### Performance Comparison
-I have included a couple of examples below to give an idea of the difference.  They illustrate a difference of 6 - 10 times.  Of course, YMMV.
+I have included a couple of examples below to give an idea of the difference.  They illustrate a difference of 10 - 23 times.  Of course, YMMV.
 
 On my laptop, backing up 15G stored across 190k files, where the data is already de-duped in zbackup on an i7 with an SSD
 * tar: 3m 2s (limited by disk speed)
-* zbackup-tar: 29s (limited by python CPU performance)
+* zbackup-tar: 19s (limited by python CPU performance)
 
 On a virtual server backing up 9G stored across 195k files, where the data is already de-duped in zbackup.  The disk and CPU are slower than the laptop.
 * tar: 15m 28s (limited by disk speed)
-* zbackup-tar: 1m 34s (limited by python CPU performance)
+* zbackup-tar: 40s (limited by python CPU performance)
 
 
 ## How to backup
