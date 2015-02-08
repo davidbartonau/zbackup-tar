@@ -78,9 +78,9 @@ function test2 ()
     backupAndRestoreDir backup01.tar backup02.tar
     export REFRESHCYCLES=5
 
-    diff /tmp/backup01.tar.manifest /tmp/backup02.tar.manifest
+    diff <(tail -n +2 /tmp/backup01.tar.manifest) <(tail -n +2 /tmp/backup02.tar.manifest)
 
-    checkForSuccess "SUCCESS Backup manifest 1 and 2 are identical" "FAIL manifest 1 and 2 are different" $TODO_BUG
+    checkForSuccess "SUCCESS Backup manifest 1 and 2 are identical" "FAIL manifest 1 and 2 are different"
 
     sleepAvoidCollision
 }

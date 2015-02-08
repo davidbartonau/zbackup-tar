@@ -85,7 +85,7 @@ Key : Value -> filename : [ Element Modification time since epoch in seconds,
                             pFlag -> Values mentioned below,
                             UID,
                             GID,
-                            Boolean value to indicate whether its a file or a directory
+                            Int value to indicate whether its a file or a directory: 1 means file, 0 means directory
                         ]
 
 Note:
@@ -178,7 +178,7 @@ def readCSVManifestFR(absPath, includes, aFlags):
         Relative path of the backup from which the file can be extracted from, 
         UID, 
         GID,
-        Boolean value to indicate whether its a file or a directory
+        Integer value to indicate whether its a file or a directory: 1 means file, 0 means directory
     """        
     firstRow = True
 
@@ -228,7 +228,7 @@ Key : Value -> filename : [ Element Modification time since epoch in seconds,
                             pFlag -> Values mentioned below,
                             UID,
                             GID,
-                            Boolean value to indicate whether its a file or a directory
+                            Integer value to indicate whether its a file or a directory: 1 means file, 0 means directory
                         ]
 
 Output:
@@ -245,7 +245,8 @@ def getCSVManifestFromDict(mDict):
     data.append (["HEADER", 1, currentCycle])
 
     for k, v in sDict.items():
-        
+        DEBUG >= 2 and print ("getCSVManifestFromDict:", v[4], " ", k, " => ", v)
+
         if v[4] > 0:       
 
             """
@@ -258,7 +259,7 @@ def getCSVManifestFromDict(mDict):
             Relative path of the backup from which the file can be extracted from, 
             UID, 
             GID,
-            Boolean value to indicate whether its a file or a directory
+            Integer value to indicate whether its a file or a directory: 1 means file, 0 means directory
             """                        
             
             data.append([k, v[2], v[0], v[1], v[3], v[5], v[6], v[7]])
@@ -329,7 +330,10 @@ def extractFilesFromBackup(absPath, aFlags, relPath, lElements, isFileMap):
                     break
 
                 if(shouldExtract(nextTInfo.name, lElements, relPath, isFileMap)):
+                    DEBUG >= 2 and print ("Extract tar file member:", nextTInfo.name)
                     tar.extract(nextTInfo)
+                else:
+                    DEBUG >= 2 and print ("Skipped tar file member:", nextTInfo.name)
 
                 tar.members=[]
                                                                
@@ -396,10 +400,33 @@ def createZBackup(absPath, aFlags):
             proc = subprocess.Popen(["zbackup", "backup", "--silent", absPath], stdin = subprocess.PIPE, stdout = fnull)          
 
         with tarfile.open(mode = "w|", fileobj = proc.stdin) as tar:    
+            for root, dirs, files in os.walk (top = dPath):
+                dirs.sort ()
+                files.sort ()
 
-            tar.add( dPath, filter = tCFilter)
-                                                               
-            tar.close() 
+                DEBUG >= 2 and print ("OS.walk sorted:", root, dirs, files)
+
+                for dir in dirs:
+                    fullDir = os.path.join(root, dir)
+                    nameInTar = shouldIncludeTarInfoAndRecord (False, fullDir)
+
+                    if nameInTar is not None:
+                        DEBUG > 1 and print ("Add dir:", fullDir, " as ", nameInTar)
+                        tar.add (name = fullDir, arcname = nameInTar, recursive = False)
+                    else:
+                        DEBUG > 1 and print ("Skip dir:", fullDir)
+
+                for file in files:
+                    fullFile = os.path.join(root, file)
+                    nameInTar = shouldIncludeTarInfoAndRecord (True, fullFile)
+
+                    if nameInTar is not None:
+                        DEBUG and print ("Add file:", fullFile, " as ", nameInTar)
+                        tar.add (name = fullFile, arcname = nameInTar, recursive = False)
+                    else:
+                        DEBUG and print ("Skip file:", fullFile)
+
+            tar.close ()
 
         proc.communicate()            
         proc.wait()                  
@@ -477,50 +504,14 @@ def matchPatterns(string, pList):
 
 
 """
-A TarInfo Filter function used while adding a directory to a tarfile
+Determine if a directory path should be included in the tar.  fullPath the full directory path including the backupRoot
 
-Input:
-tFinfo -> A TarInfo object
+Considers exclusion paths and refresh cycles.
 
-Output:
-A modified TarInfo object/None
-"""
-def tCFilter(tInfo):
+Records that a path has been added by updating the manifest and logging.  fullPath the full directory path including the backupRoot
 
-    tInfo.name = '/'+tInfo.name
+Return the name of the file in the archive or None if the file should not be archived.
 
-    if tInfo.name == dPath:
-        tInfo.name = '.'
-        return tInfo
-  
-    rPath = getRelativePath(tInfo.name, dPath)    
-
-    if not matchPatterns(rPath, excludes):
-        result = handleNewElement(rPath, tInfo)			
-        v = mDict[rPath]
-
-        if v[4] > 0 and v[7]:
-            printInfo(v[4], rPath)                    
-
-        return result
-    elif mDict.__contains__(rPath):
-        mDict.pop(rPath)		
-
-
-
-"""
-Based on the new TarInfo object, make changes to the global mDict and return whether it should be included in the tar or not
-
-Input:
-rPath -> This would be the name of this element in the final tar
-tFinfo -> TarInfo object
-
-Output:
-A modified TarInfo object/None
-"""
-def handleNewElement(rPath, tInfo):    
-
-    """
     mDict -> A dictionary with the following key value pair
 
 	Key : Value -> filename : [ Element Modification time since epoch in seconds, 
@@ -530,7 +521,7 @@ def handleNewElement(rPath, tInfo):
 	                            pFlag -> Values mentioned below,
 	                            UID,
 	                            GID,
-	                            Boolean value to indicate whether its a file or a directory
+	                            Integer value to indicate whether its a file or a directory: 1 means file, 0 means directory
 	                        ]  
                             
     pFlag values can be 0, 1, 2, 3, 4                         
@@ -541,52 +532,70 @@ def handleNewElement(rPath, tInfo):
     2 -> Needs to be stored
     3 -> The element has been modified
     4 -> The element needs to be backed up again                              
-    """
+"""
+def shouldIncludeTarInfoAndRecord (isFile, fullPath):
+    # If we are tarring . then we leave the . in front  of the files in the archive
+    if fullPath[0] != ".":
+        pathInTar = getRelativePath (fullPath, dPath)
+    else:
+        pathInTar = fullPath
 
-    if(mDict.__contains__(rPath)):
-        """
-        Retained
-        """
-        mDict[rPath][4] = 1
+    if matchPatterns(pathInTar, excludes):
+        DEBUG >= 2 and print ("Matches excludes")
+        return None
 
-    if (not mDict.__contains__(rPath)) or (int(tInfo.mtime) > mDict[rPath][0]) or mDict[rPath][5]!=tInfo.uid or mDict[rPath][6]!=tInfo.gid:
-        
-        if not mDict.__contains__(rPath):
-            """
-            Stored
-            """
-            val = 2
-        else:
-            """
-            Modified
-            """                 
-            val = 3        
-          
-        if(tInfo.isdir()):
-            mDict[rPath] = [int(tInfo.mtime), int(time.time()), tInfo.size, getRelativePath(nBackup, iPath), val, tInfo.uid, tInfo.gid, 0]                    
-        else:    
-            mDict[rPath] = [int(tInfo.mtime), int(time.time()), tInfo.size, getRelativePath(nBackup, iPath), val, tInfo.uid, tInfo.gid, 1]                            	
-        
-        tInfo.name = rPath
-        return tInfo
 
-    elif refreshCycles: 
-         
-        if shouldBack(currentCycle, rPath, mDict[rPath][1]):
-            
-            mDict[rPath][1] = int(time.time())            
-            mDict[rPath][3] = getRelativePath(nBackup, iPath)   
-            """
-            Refreshed
-            """                      
-            mDict[rPath][4] = 4                               
+    # The file isn't excluded, so we might back it up
+    shouldBackupFile = False
 
-            tInfo.name = rPath
-            return tInfo
+    statInfo = os.lstat(fullPath)
+    fileUID = statInfo.st_uid
+    fileGID = statInfo.st_gid
+    fileModTime = statInfo.st_mtime
+    fileSize = statInfo.st_size
+
+    if(mDict.__contains__(pathInTar)):
+        manifestData = mDict[pathInTar]
+
+        DEBUG >= 2 and print ("This file has been backed up before:", pathInTar, " manifestData:", manifestData)
+
+        # IF File was modified                   or  User ID changed                 or  Group ID changed
+        if (int(fileModTime) > manifestData[0]) or  (manifestData[5] != fileUID)  or  (manifestData[6] != fileGID):
+
+            # Modified = 3
+            manifestData = [int(fileModTime), int(time.time()), fileSize, getRelativePath(nBackup, iPath), 3, fileUID, fileGID, (1 if isFile else 0)]                    
+
+            mDict[pathInTar] = manifestData
+            shouldBackupFile = True
+
+        elif refreshCycles: 
+            if shouldBack(currentCycle, pathInTar, manifestData[1]):
+                manifestData[1] = int(time.time())            
+                manifestData[3] = getRelativePath(nBackup, iPath)   
+
+                # Refreshed = 4
+                manifestData[4] = 4                               
+                shouldBackupFile = True
     
-    if(tInfo.isdir()):
-        return tInfo
-    else:    	
+        if not shouldBackupFile:
+            # Retained = 1
+            manifestData[4] = 1
+            shouldBackupFile = False
+
+    else:
+        # Stored first time = 2        
+        manifestData = [int(fileModTime), int(time.time()), fileSize, getRelativePath(nBackup, iPath), 2, fileUID, fileGID, (1 if isFile else 0)]
+
+        mDict[pathInTar] = manifestData
+        shouldBackupFile = True
+        
+    DEBUG >= 2 and print ("shouldIncludeTarInfoAndRecord:", pathInTar, " :", shouldBackupFile)
+
+    if shouldBackupFile:
+        printInfo(manifestData[4], pathInTar)                    
+
+        return pathInTar
+    else:
         return None
 
 
@@ -610,7 +619,7 @@ def handleBackupCreation(pArgs):
     if not hBCreationChecks(pArgs):
         return -1
        
-    dPath = os.path.abspath(pArgs.dPath)+"/"        
+    dPath = pArgs.dPath
     nBackup = os.path.realpath(pArgs.nBackup)    
     
     iPath = getInfoPath(os.path.dirname(nBackup))      
