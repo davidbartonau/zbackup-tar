@@ -69,11 +69,11 @@ zbackup-tar restore --backup /var/backups/zbackup/backups/bigfiles4.tar folder1/
 
 ## Advanced considerations
 ### Summary
-It is useful to freshen our files at regular intervals (because zbackup deduplicates, this has no storage cost).  For example, if we want to ensure that our files are no older than 48h +/- 2h, we do the following:
+It is useful to freshen our files at regular intervals (because zbackup deduplicates, this has no storage cost).  For example, if we want to ensure that our files are within the last 48 backups, we do the following:
 
 ````
-# Freshen files between 46 - 40h
-zbackup-tar create --previousBackup /var/backups/zbackup/backups/bigfiles4.tar --newBackup /var/backups/zbackup/backups/bigfiles5.tar --exclude "*.log" --maxAge 48 --maxAgeJitter 2 /big/files/
+# Freshen files within the last 48 backups
+zbackup-tar create --previousBackup /var/backups/zbackup/backups/bigfiles4.tar --newBackup /var/backups/zbackup/backups/bigfiles5.tar --exclude "*.log" --refreshCycles 48 /big/files/
 
 ````
 
@@ -82,11 +82,15 @@ Large directory trees with 100k+ files that are slowly changing will eventually 
 
 For this reason, the option --maxAge exists.  This is an optional parameter that inidcates that any file older than maxAge hours should be refreshed in the tar.  Thanks to the magic of zbackup, it will be deduplicated anyway.
 
-For example, if I backup every hour and set --maxAge 48 then I can be sure that all files will exist within the last 48 tar files (two days).  This should be efficient to restore.
+For example, if I backup every hour and set --refreshCycles 48 then I can be sure that all files will exist within the last two days.  This should be efficient to restore.
 
-This creates its own problem.  As an example, suppose we touch all the files in the directory being backed up.  All the files will be backed up, which is unavoidable.  However, 48 hours later all the files will be refreshed.  Then 48 hours later again, and so on.  The result is that 47 backups do almost nothing and then the each 48th backup backs up the entire directory tree, which is the exact IO load problem we tried to avoid in the first place.
+There are some special considerations for small files that zbackup cannot deduplicate singly.  zbackup deduplicates blocks and if the file is smaller than a block, this can lead to catastrophically bad behaviour e.g.:
+- backup A, B, C on day 1
+- backup C, D, E on day 2 
+- backup A, C, E on day 3
+- backup B, C, A on day 4
 
-The solution is --maxAgeJitter.  This flag goes in tandem with maxAge and it deterministically varies the maxAge for each file based on the filename.  So for example with a jitter of 2 hours the maxAge might vary from 46 - 50 hours.  Each file will have it's own unique maxAge based on a hash of the filename.  The result is that large groups of changed files will gradually drift apart and be refreshed in different intervals and so each backup will refresh 1 / 48th of all the files (in the example of maxAge 48 with hourly backups)
+In each case, zbackup is **unable to deduplicate** the files because the file bytes are deduplicated as a unit and the full storage cost is paid each time.  This is especially troubling for day 4, when it is the same files as day 1, just in a different order.  For this reason, zbackup-tar will always refresh files together as a cohort based on the hash of the filename.  Additionally, the order the files are tarred is consistent based on alphabetical order.
 
 
 ## How it works
