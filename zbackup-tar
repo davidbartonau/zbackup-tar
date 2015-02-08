@@ -41,7 +41,7 @@ refreshCycles = 0
 currentCycle = 1
 
 
-DEBUG = False
+DEBUG = 0
 
 
 
@@ -605,7 +605,7 @@ def handleBackupCreation(pArgs):
     """
     Necessary in order to make changes to global variables
     """
-    global iPath, mDict, dPath, excludes, nBackup, refreshCycles
+    global iPath, mDict, dPath, excludes, nBackup, refreshCycles, DEBUG
     
     if not hBCreationChecks(pArgs):
         return -1
@@ -615,6 +615,9 @@ def handleBackupCreation(pArgs):
     
     iPath = getInfoPath(os.path.dirname(nBackup))      
     refreshCycles = pArgs.refreshCycles
+
+    if pArgs.verbosity is not None:
+        DEBUG = pArgs.verbosity
 
     if pArgs.pBackup:
                 
@@ -825,6 +828,9 @@ def getCreateArgsParser():
     parser.add_argument('--refreshCycles', dest = 'refreshCycles', metavar = 'REFRESHCYCLES', type = float,
         help = 'Refresh files every N backup cycle')   
     
+    parser.add_argument('--verbosity', dest = 'verbosity', metavar = 'VERBOSITY', type = int,
+        help = 'Debug output: reasonable values are 1, 2')   
+    
     parser.add_argument('dPath', metavar = 'DIRPATH', type = str,
         help = 'Path of the directory with the files to be backed up' )     
     
@@ -847,6 +853,9 @@ def getRestoreArgsParser():
     
     parser.add_argument('--zbackupArgs', dest = 'aFlags', metavar = 'AF', type = str, nargs = '*',
         help = 'Additional flags to create a new backup')
+    
+    parser.add_argument('--verbosity', dest = 'verbosity', metavar = 'VERBOSITY', type = int,
+        help = 'Debug output: reasonable values are 1, 2')   
     
     parser.add_argument('includes', metavar = 'IFiles', nargs = '+', 
     	help = 'Restore the file structure from DIRPATH onwards using the backups')                                      
