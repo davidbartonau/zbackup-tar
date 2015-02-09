@@ -753,9 +753,11 @@ True/False
 """    
 def shouldBack(currentCycle, eName, lBTime):
     currentRefreshCycle = currentCycle % refreshCycles
-    fileRefreshCycle = (int(hashlib.sha1(eName.encode('UTF-8')).hexdigest(), 16 ) % refreshCycles)
+    filenameHash = hashlib.sha1(eName.encode('UTF-8')).hexdigest()[:6]
+    fileRefreshCycle = (int(filenameHash, 16 ) % refreshCycles)
 
-    DEBUG and print ("shouldBack ", eName, " currentCycle:", currentCycle, " refreshCycles:", refreshCycles, " fileRefreshCycle:", fileRefreshCycle);
+    DEBUG >= 3 and print ("shouldBack ", eName, " hash:", filenameHash, " intVal:", int(filenameHash, 16 ));
+    DEBUG >= 1 and print ("shouldBack ", eName, " currentCycle:", currentCycle, " refreshCycles:", refreshCycles, " fileRefreshCycle:", fileRefreshCycle);
 
     if currentRefreshCycle == fileRefreshCycle:
         return True
@@ -878,6 +880,8 @@ def main():
     cParser = getCreateArgsParser()
     rParser = getRestoreArgsParser()
                     
+    DEBUG >= 1 and print ("Debug level:", DEBUG)
+
     if len(sys.argv) > 1:
     
         if sys.argv[1] == 'create':
