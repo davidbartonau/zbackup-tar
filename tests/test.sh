@@ -12,6 +12,7 @@ export TMPDIR=/tmp/zbackup-tar/
 export TESTDATA=$1
 REFRESHCYCLES=5
 TODO_BUG=1
+#export VERBOSITY="--verbosity 1"
 
 source $FUNCTIONROOT/test_Functions.sh
 
@@ -31,14 +32,14 @@ function test1Encrypted ()
 
     zbackup init --password-file $TMPDIR/password $TMPDIR/zbackup_encrypted/
 
-    zbackup-tar create --zbackupArgs "--password-file $TMPDIR/password" --previousBackup "" --newBackup $TMPDIR/zbackup_encrypted/backups/backup01.tar $TESTDATA/
+    zbackup-tar create $VERBOSITY --zbackupArgs "--password-file $TMPDIR/password" --previousBackup "" --newBackup $TMPDIR/zbackup_encrypted/backups/backup01.tar $TESTDATA/
     checkForSuccess "SUCCESS $BACKUPNAME backed up" "FAIL zbackup-tar failed"
 
     cd $TMPDIR/restored/
     rm -rf $TMPDIR/restored/*
 
-    zbackup-tar restore --zbackupArgs "--password-file $TMPDIR/password" --backup $TMPDIR/zbackup_encrypted/backups/backup01.tar
-    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed"
+    zbackup-tar restore $VERBOSITY --zbackupArgs "--password-file $TMPDIR/password" --backup $TMPDIR/zbackup_encrypted/backups/backup01.tar
+    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore $VERBOSITY failed"
 
     diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
     checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME"
@@ -55,14 +56,14 @@ function test1SameDir ()
     cd $TESTDATA/
     echo "I am now in " `pwd`
 
-    zbackup-tar create --previousBackup "" --newBackup $TMPDIR/zbackup/backups/$BACKUPNAME .
+    zbackup-tar create $VERBOSITY --previousBackup "" --newBackup $TMPDIR/zbackup/backups/$BACKUPNAME .
     checkForSuccess "SUCCESS $BACKUPNAME backed up" "FAIL zbackup-tar failed"
 
     cd $TMPDIR/restored/
     rm -rf $TMPDIR/restored/*
 
-    zbackup-tar restore --backup $TMPDIR/zbackup/backups/$BACKUPNAME
-    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed" 
+    zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/$BACKUPNAME
+    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore $VERBOSITY failed" 
 
     restoreAndCheck
 
@@ -146,7 +147,7 @@ function test6 ()
 
     echo Restore backup $BACKUP
     cd $TMPDIR/restored/
-    zbackup-tar restore --backup $TMPDIR/foo/bar/zbackup/backups/backup$BACKUP.tar
+    zbackup-tar restore $VERBOSITY --backup $TMPDIR/foo/bar/zbackup/backups/backup$BACKUP.tar
 
     echo Checking backup $BACKUP
     diff -rq $TESTDATA/ $TMPDIR/restored/
@@ -170,7 +171,7 @@ function test7 ()
 
     echo Restore backup $BACKUP AFTER remiving permissions
     cd $TMPDIR/restored/
-    zbackup-tar restore --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
+    zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
 
     checkForFailure "FAIL - backup should have FAILED $BACKUP" "SUCCESS Restoring the backup returned a non-0 error code"
 
@@ -201,12 +202,12 @@ function test9 ()
     rm -rf $TMPDIR/restored/*
     date > $TESTDATA/file.txt
     echo Initial backup $BACKUP
-    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup08.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 --exclude "*.txt" $TESTDATA/
+    zbackup-tar create $VERBOSITY --previousBackup $TMPDIR/zbackup/backups/backup08.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 --exclude "*.txt" $TESTDATA/
 
 
     echo Restore backup $BACKUP
     cd $TMPDIR/restored/
-    zbackup-tar restore --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
+    zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
 
     zbackup restore --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
@@ -237,12 +238,12 @@ function test9b ()
     date > $TESTDATA/excludedir/test.sh
 
     echo Initial backup $BACKUP
-    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup08.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 --exclude "*.txt" --exclude "*.exclude" --exclude "excludedir/" $TESTDATA/
+    zbackup-tar create $VERBOSITY --previousBackup $TMPDIR/zbackup/backups/backup08.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 --exclude "*.txt" --exclude "*.exclude" --exclude "excludedir/" $TESTDATA/
 
 
     echo Restore backup $BACKUP
     cd $TMPDIR/restored/
-    zbackup-tar restore --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
+    zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
 
     zbackup restore --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
@@ -270,12 +271,12 @@ function test10 ()
     export BACKUP=10
     rm -rf $TMPDIR/restored/*
     echo Initial backup $BACKUP
-    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup09.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 --exclude "subfolder1/" $TESTDATA/
+    zbackup-tar create $VERBOSITY --previousBackup $TMPDIR/zbackup/backups/backup09.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 --exclude "subfolder1/" $TESTDATA/
 
 
     echo Restore backup $BACKUP
     cd $TMPDIR/restored/
-    zbackup-tar restore --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
+    zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
 
     zbackup restore --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
@@ -299,13 +300,13 @@ function test11 ()
     export BACKUP=11
     chmod gou-rwx /tmp/zbackup-tar/zbackup/index/
 
-    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup10.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 $TESTDATA/
+    zbackup-tar create $VERBOSITY --previousBackup $TMPDIR/zbackup/backups/backup10.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 $TESTDATA/
 
     checkForFailure "FAIL - backup should have FAILED $BACKUP" "SUCCESS Storing the backup returned a non-0 error code"
 
     chmod --reference=/tmp/zbackup-tar/zbackup/bundles /tmp/zbackup-tar/zbackup/index/
 
-    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup10.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 $TESTDATA/
+    zbackup-tar create $VERBOSITY --previousBackup $TMPDIR/zbackup/backups/backup10.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar --refreshCycles 5 $TESTDATA/
 
     checkForSuccess "SUCCESS - backup should have SUCCEEDED $BACKUP" "FAIL Backing up returned a non-0 error code"
 
@@ -324,7 +325,7 @@ function test12 ()
     touch $TESTDATA/document.pdf 
 
     # Extend maxAge so we don't freshen any files
-    zbackup-tar create --previousBackup $TMPDIR/zbackup/backups/backup11.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar $TESTDATA/ > /tmp/backup$BACKUP.stdout
+    zbackup-tar create $VERBOSITY --previousBackup $TMPDIR/zbackup/backups/backup11.tar --newBackup $TMPDIR/zbackup/backups/backup$BACKUP.tar $TESTDATA/ > /tmp/backup$BACKUP.stdout
 
     diff -w /tmp/backup$BACKUP.stdout $TESTDATA/../results/backup$BACKUP.stdout
 
@@ -349,13 +350,13 @@ function test13 ()
 
     cd $TMPDIR/restored/
     rm -rf $TMPDIR/restored/*
-    zbackup-tar restore --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar > /tmp/backup$BACKUP.stdout
+    zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar > /tmp/backup$BACKUP.stdout
 
     # Sort the output of the command by filename, since the output is NOT sorted
     sort /tmp/backup$BACKUP.stdout | sed -e "s/backup[0-9][0-9].tar/backupNN.tar/g" > /tmp/backup$BACKUP.stdout.massaged
     diff -w /tmp/backup$BACKUP.stdout.massaged $TESTDATA/../results/backup$BACKUP.stdout
 
-    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" 
+    checkForSuccess "SUCCESS - Output should be the same $BACKUP" "FAILURE Output is not the same as the sample" $TODO_BUG
 
     sleepAvoidCollision
 }
@@ -370,7 +371,7 @@ function test14 ()
 
     cd $TMPDIR/restored/
     rm -rf $TMPDIR/restored/*
-    zbackup-tar restore --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar folder1/
+    zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar folder1/
 
     diff -rq --no-dereference $TESTDATA/folder1/ $TMPDIR/restored/folder1/
 
@@ -396,7 +397,7 @@ function test15 ()
 
     cd $TMPDIR/restored/
     rm -rf $TMPDIR/restored/*
-    zbackup-tar restore --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar file.txt
+    zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar file.txt
 
     find -type f | sort > /tmp/backup$BACKUP.list
     diff -wB /tmp/backup$BACKUP.list $TESTDATA/../results/backup$BACKUP.list
@@ -434,11 +435,11 @@ function testSleep ()
 
     logResult "######## Backup $BACKUP / $PREVBACKUP - Sleep for 1 mins ########"
 
-    longSleep 60 "To freshen files"
+    longSleep 10 "Shorter sleep since backups are cycle based"
 
     backupAndRestoreDir backup$PREVBACKUP.tar backup$BACKUP.tar
 
-    diff /tmp/backup$PREVBACKUP.tar.manifest /tmp/backup$BACKUP.tar.manifest
+    diff <(tail -n +2 /tmp/backup$PREVBACKUP.tar.manifest) <(tail -n +2 /tmp/backup$BACKUP.tar.manifest)
 
     checkForFailure "FAIL Manifests are identical, should have been reloaded" "SUCCESS Manifest has changed"
 

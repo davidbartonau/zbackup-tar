@@ -45,6 +45,69 @@ DEBUG = 0
 
 
 
+class BackupFile:
+    def __init__(self, _pathInTar):
+        self.pathInTar = _pathInTar
+        self.backupCycle = getBackupCycle (_pathInTar)
+        self.modificationSinceEpoch = None
+        self.lastBackupSinceEpoch = None
+        self.lastBackupTar = None
+        self.sizeInBytes = None
+        self.UID = None
+        self.GID = None
+        self.isAFile = None
+        self.fullFileName = None
+
+        # backupStatus can have one of the following values
+        # 0 -> Initialized value
+        # 1 -> Needs to be retained
+        # 2 -> Needs to be stored
+        # 3 -> The element has been modified
+        # 4 -> The element needs to be backed up again
+        self.backupStatus = 0
+
+
+
+    """ Read in the rows in the backup CSV manifest
+        0: Element Name, 
+        1: Size, 
+        2: Element Modification time since epoch in seconds, 
+        3: Last Backup time since epoch in seconds,  
+        4: Relative path of the backup from which the file can be extracted from, 
+        5: UID, 
+        6: GID,
+        7: Boolean value to indicate whether its a file or a directory
+    """
+    def readCSVRow (self, csvRow):
+        self.modificationSinceEpoch = int(csvRow[2])
+        self.lastBackupSinceEpoch = int(csvRow[3])
+        self.lastBackupTar = csvRow[4]
+        self.sizeInBytes = int(csvRow[1])
+        self.UID = int(csvRow[5])
+        self.GID = int(csvRow[6])
+        self.isAFile = int(csvRow[7])
+        self.fullFileName = None
+
+
+
+    """
+        Write out the row to an array as per the format used by readCSVRow
+    """
+    def writeCSVRow (self):
+        return [
+                    self.pathInTar,
+                    self.sizeInBytes,
+                    self.modificationSinceEpoch ,
+                    self.lastBackupSinceEpoch ,
+                    self.lastBackupTar ,
+                    self.UID ,
+                    self.GID ,
+                    self.isAFile
+                ]
+
+
+
+
 """
 Read the header of a CSV
     First Row is Header
@@ -76,29 +139,11 @@ aFlags -> Additional flags to be passed to zbackup
 
 Output:
 
-mDict -> A dictionary with the following key value pair
-
-Key : Value -> filename : [ Element Modification time since epoch in seconds, 
-                            Last Backup time since epoch in seconds, 
-                            Size, 
-                            Relative path of new backup, 
-                            pFlag -> Values mentioned below,
-                            UID,
-                            GID,
-                            Int value to indicate whether its a file or a directory: 1 means file, 0 means directory
-                        ]
+mDict "pathInTar" => BackupFile
 
 Note:
 Changing the ownership of a directory doesn't alter its modification time. Thats why we need to keep track of UID and GID as well.    
 
-pFlag values can be 0, 1, 2, 3, 4                         
-After all the processing is done the function "printInfo" will use this flag value to print the relevant info
-
-0 -> Initialized value
-1 -> Needs to be retained
-2 -> Needs to be stored
-3 -> The element has been modified
-4 -> The element needs to be backed up again
 """
 def readCSVManifestFC(absPath, aFlags):
     
@@ -112,18 +157,6 @@ def readCSVManifestFC(absPath, aFlags):
     sIO = io.StringIO(data)
     csvReader = csv.reader(sIO, dialect = 'unix', quoting = csv.QUOTE_MINIMAL)    
 
-    """
-
-    A row in the backup CSV manifest
-        Element Name, 
-        Size, 
-        Element Modification time since epoch in seconds, 
-        Last Backup time since epoch in seconds,  
-        Relative path of the backup from which the file can be extracted from, 
-        UID, 
-        GID,
-        Boolean value to indicate whether its a file or a directory
-    """
 
     firstRow = True
 
@@ -132,8 +165,10 @@ def readCSVManifestFC(absPath, aFlags):
             readCSVHeader (row)
             firstRow = False
         else:
-            mDict[row[0]]=[int(row[2]), int(row[3]), int(row[1]), row[4], 0, int(row[5]), int(row[6]), int(row[7])]                
-        
+            backupFile = BackupFile (row[0])
+            backupFile.readCSVRow (row)
+            mDict[backupFile.pathInTar] = backupFile
+
     return mDict 
 
 
@@ -149,16 +184,11 @@ aFlags -> Additional flags to be passed to zbackup
 
 Output:
 
-mDict -> A dictionary with the following key value pair
-Key : Value -> Relative path of the backup : A set of files to be extracted from this backup
-
-isFileMap -> Another dictionary with the following key value pair
-Key : Value -> Name of the element to be restored : A boolean value to indicate whether its a file or a directory
+mDict "pathInTar" => BackupFile
 """
 def readCSVManifestFR(absPath, includes, aFlags):
 
     mDict = {}
-    isFileMap = {}
     iList = generatePatterns(includes)
 
     data = readManifestFromBackup(absPath, aFlags).decode('utf-8')
@@ -169,17 +199,6 @@ def readCSVManifestFR(absPath, includes, aFlags):
     sIO = io.StringIO(data)    
     csvReader = csv.reader(sIO, dialect = 'unix', quoting = csv.QUOTE_MINIMAL)    
  
-    """
-    A row in the backup CSV manifest
-        Element Name, 
-        Size, 
-        Element Modification time since epoch in seconds, 
-        Last Backup time since epoch in seconds,  
-        Relative path of the backup from which the file can be extracted from, 
-        UID, 
-        GID,
-        Integer value to indicate whether its a file or a directory: 1 means file, 0 means directory
-    """        
     firstRow = True
 
     for row in csvReader:
@@ -187,30 +206,20 @@ def readCSVManifestFR(absPath, includes, aFlags):
             readCSVHeader (row)
             firstRow = False
         else:
-            """
-            Element Name        
-            """
-            name = row[0]
+            backupFile = BackupFile (row[0])
 
-            if not matchPatterns(name, iList):
+            if not matchPatterns(backupFile.pathInTar, iList):
                 continue
 
-            """
-            Relative path of the backup from which the file can be extracted from        
-            """            
-            key = row[4]
+            backupFile.readCSVRow (row)
+            lastBackupTar = backupFile.lastBackupTar
 
-            if not mDict.__contains__(key):
-                mDict[key] = set()
+            if not mDict.__contains__(lastBackupTar):
+                mDict[lastBackupTar] = set()
 
-            mDict[key].add(name)
+            mDict[lastBackupTar].add(backupFile.pathInTar)
 
-            """
-            Boolean value to indicate whether its a file or a directory
-            """ 
-            isFileMap[name] = int(row[7])				
-	    
-    return mDict, isFileMap    
+    return mDict
 
 
 
@@ -219,17 +228,7 @@ Create an in memory CSV manifest based on the dictionary while creating a new ba
 
 Input:
 
-mDict -> A dictionary with the following key value pair
-
-Key : Value -> filename : [ Element Modification time since epoch in seconds, 
-                            Last Backup time since epoch in seconds, 
-                            Size, 
-                            Relative path of new backup, 
-                            pFlag -> Values mentioned below,
-                            UID,
-                            GID,
-                            Integer value to indicate whether its a file or a directory: 1 means file, 0 means directory
-                        ]
+mDict "pathInTar" => BackupFile
 
 Output:
 The raw data associated with CSV manifest
@@ -244,25 +243,12 @@ def getCSVManifestFromDict(mDict):
     data = []
     data.append (["HEADER", 1, currentCycle])
 
-    for k, v in sDict.items():
-        DEBUG >= 2 and print ("getCSVManifestFromDict:", v[4], " ", k, " => ", v)
+    for pathInTar, backupFile in sDict.items():
+        DEBUG >= 2 and print ("getCSVManifestFromDict:", backupFile.backupStatus, " ", pathInTar, " => ", backupFile)
 
-        if v[4] > 0:       
+        if backupFile.backupStatus > 0:       
 
-            """
-            A row in the backup CSV manifest
-
-            Element Name, 
-            Size, 
-            Element Modification time since epoch in seconds, 
-            Last Backup time since epoch in seconds,  
-            Relative path of the backup from which the file can be extracted from, 
-            UID, 
-            GID,
-            Integer value to indicate whether its a file or a directory: 1 means file, 0 means directory
-            """                        
-            
-            data.append([k, v[2], v[0], v[1], v[3], v[5], v[6], v[7]])
+            data.append(backupFile.writeCSVRow ())
 
     csvWriter.writerows(data)
 
@@ -278,18 +264,14 @@ Input:
 eName -> Name of the element
 listElements -> List of elements to be extracted from this backup
 bFPath -> Associated relative backup path where this element can be found
-isFileMap -> A map to find out whether the element is a file or a directory
 
 Output:
 True/False
 """           
-def shouldExtract(eName, listElements, bFPath, isFileMap):
+def shouldExtract(eName, listElements, bFPath):
     
     if eName in listElements:
-
-        if(isFileMap[eName]):
-            print(eName+"\tEXTRACTED from "+bFPath)
-
+        print(eName+"\tEXTRACTED from "+bFPath)
         return True
 
     return False
@@ -305,12 +287,11 @@ absPath -> Absolute path of the backup
 aFlags -> List of flags to be passed to zbackup
 relPath -> Relative path of backup (Obtained making use iPath (The location of "info" file within zbackup dir structure))
 lElements -> List of elements to be extracted from this backup
-isFileMap -> A dictionary to find out whether a particular element is a file or a directory
 
 Output:
 None
 """ 
-def extractFilesFromBackup(absPath, aFlags, relPath, lElements, isFileMap):
+def extractFilesFromBackup(absPath, aFlags, relPath, lElements):
 
     with open(os.devnull, "w") as fnull:
 
@@ -319,6 +300,7 @@ def extractFilesFromBackup(absPath, aFlags, relPath, lElements, isFileMap):
         else:
             shellCmd = "zbackup restore --silent "+absPath+' | cat'         
 
+        DEBUG >= 1 and print ("restore shellCmd:", shellCmd)
         proc = subprocess.Popen(shellCmd, shell = True, stdout = subprocess.PIPE, stderr = fnull)
 
         with tarfile.open(mode = "r|", fileobj = proc.stdout) as tar:  
@@ -329,7 +311,7 @@ def extractFilesFromBackup(absPath, aFlags, relPath, lElements, isFileMap):
                 if not nextTInfo:
                     break
 
-                if(shouldExtract(nextTInfo.name, lElements, relPath, isFileMap)):
+                if(shouldExtract(nextTInfo.name, lElements, relPath)):
                     DEBUG >= 2 and print ("Extract tar file member:", nextTInfo.name)
                     tar.extract(nextTInfo)
                 else:
@@ -390,8 +372,8 @@ Output:
 None
 """     
 def createZBackup(absPath, aFlags):
-
     with open(os.devnull, "w") as fnull:
+        filesToBackup = []
 
         if(aFlags):
             cCmd = "zbackup backup --silent "+absPath+" "+' '.join(aFlags)
@@ -421,10 +403,19 @@ def createZBackup(absPath, aFlags):
                     nameInTar = shouldIncludeTarInfoAndRecord (True, fullFile)
 
                     if nameInTar is not None:
-                        DEBUG and print ("Add file:", fullFile, " as ", nameInTar)
-                        tar.add (name = fullFile, arcname = nameInTar, recursive = False)
+                        backupCycle = mDict[nameInTar].backupCycle
+                        DEBUG and print ("Deferred file:", fullFile, " as ", nameInTar, " cycle:", backupCycle)
+                        filesToBackup.append ((backupCycle, nameInTar))
                     else:
                         DEBUG and print ("Skip file:", fullFile)
+
+            # Sort the files by refresh cycle and then by name
+            filesToBackup.sort ()
+
+            for backupCycle, nameInTar in filesToBackup:
+                fullFile = mDict[nameInTar].fullFileName
+                DEBUG and print ("Adding file cycle:", backupCycle, " file:", fullFile, " as ", nameInTar, " cycle:", backupCycle)
+                tar.add (name = fullFile, arcname = nameInTar, recursive = False)
 
             tar.close ()
 
@@ -512,26 +503,8 @@ Records that a path has been added by updating the manifest and logging.  fullPa
 
 Return the name of the file in the archive or None if the file should not be archived.
 
-    mDict -> A dictionary with the following key value pair
-
-	Key : Value -> filename : [ Element Modification time since epoch in seconds, 
-	                            Last Backup time since epoch in seconds, 
-	                            Size, 
-	                            Relative path of new backup, 
-	                            pFlag -> Values mentioned below,
-	                            UID,
-	                            GID,
-	                            Integer value to indicate whether its a file or a directory: 1 means file, 0 means directory
-	                        ]  
-                            
-    pFlag values can be 0, 1, 2, 3, 4                         
-    After all the processing is done the function printInfo will use this flag value to print the relevant info
-
-    0 -> Initialized value
-    1 -> Needs to be retained
-    2 -> Needs to be stored
-    3 -> The element has been modified
-    4 -> The element needs to be backed up again                              
+Modifies: 
+mDict "pathInTar" => BackupFile
 """
 def shouldIncludeTarInfoAndRecord (isFile, fullPath):
     # If we are tarring . then we leave the . in front  of the files in the archive
@@ -544,7 +517,6 @@ def shouldIncludeTarInfoAndRecord (isFile, fullPath):
         DEBUG >= 2 and print ("Matches excludes")
         return None
 
-
     # The file isn't excluded, so we might back it up
     shouldBackupFile = False
 
@@ -555,44 +527,49 @@ def shouldIncludeTarInfoAndRecord (isFile, fullPath):
     fileSize = statInfo.st_size
 
     if(mDict.__contains__(pathInTar)):
-        manifestData = mDict[pathInTar]
+        backupFile = mDict[pathInTar]
 
         DEBUG >= 2 and print ("This file has been backed up before:", pathInTar, " manifestData:", manifestData)
 
         # IF File was modified                   or  User ID changed                 or  Group ID changed
-        if (int(fileModTime) > manifestData[0]) or  (manifestData[5] != fileUID)  or  (manifestData[6] != fileGID):
-
-            # Modified = 3
-            manifestData = [int(fileModTime), int(time.time()), fileSize, getRelativePath(nBackup, iPath), 3, fileUID, fileGID, (1 if isFile else 0)]                    
-
-            mDict[pathInTar] = manifestData
+        if (int(fileModTime) > backupFile.modificationSinceEpoch) or (fileUID != backupFile.UID) or (fileGID != backupFile.GID):
+            backupFile.backupStatus = 3 # Modified = 3
             shouldBackupFile = True
 
         elif refreshCycles: 
-            if shouldBack(currentCycle, pathInTar, manifestData[1]):
-                manifestData[1] = int(time.time())            
-                manifestData[3] = getRelativePath(nBackup, iPath)   
+            currentRefreshCycle = currentCycle % refreshCycles
 
-                # Refreshed = 4
-                manifestData[4] = 4                               
+            DEBUG >= 1 and print ("refreshCycles ", pathInTar, " backupFile.backupCycle:", backupFile.backupCycle, " currentRefreshCycle:", currentRefreshCycle);
+
+            if currentRefreshCycle == backupFile.backupCycle:
+                backupFile.backupStatus = 4 # Refreshed = 4
                 shouldBackupFile = True
     
         if not shouldBackupFile:
-            # Retained = 1
-            manifestData[4] = 1
+            
+            backupFile.backupStatus = 1 # Retained = 1
             shouldBackupFile = False
 
     else:
-        # Stored first time = 2        
-        manifestData = [int(fileModTime), int(time.time()), fileSize, getRelativePath(nBackup, iPath), 2, fileUID, fileGID, (1 if isFile else 0)]
+        backupFile = BackupFile (pathInTar)        
 
-        mDict[pathInTar] = manifestData
+        backupFile.backupStatus = 2 # Stored first time = 2        
+        mDict[pathInTar] = backupFile
         shouldBackupFile = True
         
+
     DEBUG >= 2 and print ("shouldIncludeTarInfoAndRecord:", pathInTar, " :", shouldBackupFile)
 
     if shouldBackupFile:
-        printInfo(manifestData[4], pathInTar)                    
+        backupFile.modificationSinceEpoch = int(fileModTime)
+        backupFile.lastBackupSinceEpoch = int(time.time())
+        backupFile.sizeInBytes = fileSize
+        backupFile.lastBackupTar = getRelativePath(nBackup, iPath)
+        backupFile.UID = fileUID
+        backupFile.GID = fileGID
+        backupFile.isAFile = (1 if isFile else 0)
+        backupFile.fullFileName = fullPath
+        printBackupFileInfo(backupFile)
 
         return pathInTar
     else:
@@ -631,7 +608,7 @@ def handleBackupCreation(pArgs):
     if pArgs.pBackup:
                 
         try:
-            mDict=readCSVManifestFC(pArgs.pBackup+'.manifest', pArgs.aFlags)
+            mDict = readCSVManifestFC(pArgs.pBackup+'.manifest', pArgs.aFlags)
                                     
         except subprocess.CalledProcessError as e:                    
             return e.returncode                    
@@ -666,19 +643,24 @@ Output:
 Return -> 0/Relevant error code
 """    
 def handleBackupRestoration(pArgs):   
+    global DEBUG
 
     if not hBRestorationChecks(pArgs):
         return -1
     
+    if pArgs.verbosity is not None:
+        DEBUG = pArgs.verbosity
+
     bPath = os.path.realpath(pArgs.backup)
     iPath = getInfoPath(bPath)
     
     try:
-        
-        mDict, isFileMap = readCSVManifestFR(bPath + '.manifest', pArgs.includes, pArgs.aFlags)
+
+        mDict = readCSVManifestFR(bPath + '.manifest', pArgs.includes, pArgs.aFlags)
 
         for backupFile, listToBeExtracted in mDict.items():
-            extractFilesFromBackup(os.path.join(iPath, backupFile), pArgs.aFlags, backupFile, listToBeExtracted, isFileMap)                    
+            DEBUG >= 1 and print ("extractFilesFromBackup ", backupFile, " listToBeExtracted:", listToBeExtracted);
+            extractFilesFromBackup(os.path.join(iPath, backupFile), pArgs.aFlags, backupFile, listToBeExtracted)
     
     except subprocess.CalledProcessError as e:                    
         return e.returncode     
@@ -711,16 +693,16 @@ Input:
 index -> A flag
 fName -> Filename (The directory info isn't printed out)
 """
-def printInfo(index, fName):
+def printBackupFileInfo(backupFile):
     
-    if index == 2:
-        print(fName+"\tSTORED")
+    if backupFile.backupStatus == 2:
+        print(backupFile.pathInTar + "\tSTORED")
         
-    elif index == 3:
-        print(fName+"\tUPDATED")
+    elif backupFile.backupStatus == 3:
+        print(backupFile.pathInTar + "\tUPDATED")
         
-    elif index == 4:
-        print(fName+"\tREFRESHED")
+    elif backupFile.backupStatus == 4:
+        print(backupFile.pathInTar + "\tREFRESHED\t" + str(backupFile.backupCycle))
 
 
 
@@ -735,35 +717,27 @@ def getRelativePath(fullPath, pathToBeSubtracted):
 
 
 """
-A function to determine whether the element should be backed up again
+A function to determine the backup cycle for a file.
 
-The backup cycle increases by one each backup to trace the lineage.  Each file has a pseudo-random cycle assigned out of refreshCycles
-
-When the backup cycle hist that number, the file is refreshed.  So all files in cycle 3 will tend to be backed up together.
+Files are backed up initially, when they are changed, and whenever it is their refresh cycle.  The idea is to try and refresh the same files together, so that small files appear in the same order.
 
 This overcomes a limitation where small files will not be deduped if they are not backed up next to the same file.
 
 Input:
-currentCycle -> Current backup cycle
-eName -> The relevant element name
-lBTime -> Last backed up epoch time
+eName -> The name of the file
 
 Output:
-True/False
+The refresh cycle
 """    
-def shouldBack(currentCycle, eName, lBTime):
-    currentRefreshCycle = currentCycle % refreshCycles
-    filenameHash = hashlib.sha1(eName.encode('UTF-8')).hexdigest()[:6]
-    fileRefreshCycle = (int(filenameHash, 16 ) % refreshCycles)
+def getBackupCycle (eName):
+    if refreshCycles:
+        currentRefreshCycle = currentCycle % refreshCycles
+        filenameHash = hashlib.sha1(eName.encode('UTF-8')).hexdigest()[:6]
+        fileRefreshCycle = (int(filenameHash, 16 ) % refreshCycles)
 
-    DEBUG >= 3 and print ("shouldBack ", eName, " hash:", filenameHash, " intVal:", int(filenameHash, 16 ));
-    DEBUG >= 1 and print ("shouldBack ", eName, " currentCycle:", currentCycle, " refreshCycles:", refreshCycles, " fileRefreshCycle:", fileRefreshCycle);
-
-    if currentRefreshCycle == fileRefreshCycle:
-        return True
+        return fileRefreshCycle
     else:
-        return False
-
+        return 0
 
 
 

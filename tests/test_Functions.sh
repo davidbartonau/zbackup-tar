@@ -56,7 +56,7 @@ function backupAndRestoreDir ()
     fi
     
     echo PREVBACKUP $PREVBACKUP NEWBACKUP $TMPDIR/zbackup/backups/$BACKUPNAME
-    zbackup-tar create --previousBackup "$PREVBACKUP" --newBackup $TMPDIR/zbackup/backups/$BACKUPNAME --refreshCycles $REFRESHCYCLES $TESTDATA/
+    zbackup-tar create $VERBOSITY --previousBackup "$PREVBACKUP" --newBackup $TMPDIR/zbackup/backups/$BACKUPNAME --refreshCycles $REFRESHCYCLES $TESTDATA/
     checkForSuccess "SUCCESS $BACKUPNAME backed up" "FAIL zbackup-tar failed" $LOCAL_TODO_BUG
 
     restoreAndCheck $LOCAL_TODO_BUG
@@ -67,14 +67,14 @@ function restoreAndCheck ()
 {
     local LOCAL_TODO_BUG=$1
 
-    echo Restore $BACKUPNAME
+    echo Restore $BACKUPNAME $VERBOSITY
 
     cd $TMPDIR/restored/
     rm -rf $TMPDIR/restored/*
 
     zbackup restore --silent $TMPDIR/zbackup/backups/$BACKUPNAME.manifest > /tmp/$BACKUPNAME.manifest
-    zbackup-tar restore --backup $TMPDIR/zbackup/backups/$BACKUPNAME
-    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore failed" $LOCAL_TODO_BUG
+    zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/$BACKUPNAME
+    checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore $VERBOSITY failed" $LOCAL_TODO_BUG
 
     echo Checking $BACKUPNAME
 
