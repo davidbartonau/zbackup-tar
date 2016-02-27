@@ -296,9 +296,9 @@ def extractFilesFromBackup(absPath, aFlags, relPath, lElements):
     with open(os.devnull, "w") as fnull:
 
         if(aFlags):
-            shellCmd = "zbackup restore --silent "+absPath+' '+' '.join(aFlags)+' | cat'
+            shellCmd = "zbackup restore --silent " + " ".join(aFlags) + " " + absPath + " | cat"
         else:
-            shellCmd = "zbackup restore --silent "+absPath+' | cat'         
+            shellCmd = "zbackup restore --silent " + absPath + " | cat"
 
         DEBUG >= 1 and print ("restore shellCmd:", shellCmd)
         proc = subprocess.Popen(shellCmd, shell = True, stdout = subprocess.PIPE, stderr = fnull)
@@ -344,10 +344,11 @@ def readManifestFromBackup(absPath, aFlags):
         retString=bytes()
 
         if(aFlags):
-            shellCmd = "zbackup restore --silent "+absPath+' '+' '.join(aFlags)+' | cat'
+            shellCmd = "zbackup restore --silent " + " ".join(aFlags) + " " + absPath + " | cat"
         else:
             shellCmd = "zbackup restore --silent "+absPath+' | cat'	    	
 
+        DEBUG >= 1 and print ("readManifestFromBackup:", shellCmd)
         proc = subprocess.Popen(shellCmd, shell = True, stdout = subprocess.PIPE, stderr = fnull)
 
         retString += proc.stdout.read()    
@@ -376,9 +377,11 @@ def createZBackup(absPath, aFlags):
         filesToBackup = []
 
         if(aFlags):
-            cCmd = "zbackup backup --silent "+absPath+" "+' '.join(aFlags)
+            cCmd = "zbackup backup --silent " + " ".join(aFlags) + " " + absPath
+            DEBUG >= 1 and print ("createZBackup with aFlags:", cCmd)
             proc = subprocess.Popen(cCmd, shell = True, stdin = subprocess.PIPE, stdout = fnull)
         else:
+            DEBUG >= 1 and print ("createZBackup with no flags:", absPath)
             proc = subprocess.Popen(["zbackup", "backup", "--silent", absPath], stdin = subprocess.PIPE, stdout = fnull)          
 
         with tarfile.open(mode = "w|", fileobj = proc.stdin) as tar:    
@@ -441,7 +444,8 @@ def createZBackupOfManifest(absPath, data, aFlags):
     with open(os.devnull, "w") as fnull:
 
         if(aFlags):
-            cCmd = "zbackup backup --silent "+absPath+" "+' '.join(aFlags)
+            cCmd = "zbackup backup --silent " + ' '.join(aFlags) + " " + absPath
+            DEBUG >= 1 and print ("createZBackupOfManifest with aFlags:", cCmd)
             proc = subprocess.Popen(cCmd, shell = True, stdin = subprocess.PIPE, stdout = fnull, stderr = fnull)
         else:
             proc = subprocess.Popen(["zbackup", "backup", "--silent", absPath], stdin = subprocess.PIPE, stdout = fnull, stderr = fnull)	    	
@@ -593,6 +597,8 @@ def handleBackupCreation(pArgs):
     """
     global iPath, mDict, dPath, excludes, nBackup, refreshCycles, DEBUG
     
+    DEBUG >= 1 and print ("handleBackupCreation:", pArgs)
+
     if not hBCreationChecks(pArgs):
         return -1
        
@@ -644,6 +650,8 @@ Return -> 0/Relevant error code
 """    
 def handleBackupRestoration(pArgs):   
     global DEBUG
+
+    DEBUG >= 1 and print ("handleBackupRestoration:", pArgs)
 
     if not hBRestorationChecks(pArgs):
         return -1
@@ -897,3 +905,4 @@ def main():
 if __name__ == "__main__":
     
     main()
+
