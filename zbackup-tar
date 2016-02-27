@@ -533,7 +533,7 @@ def shouldIncludeTarInfoAndRecord (isFile, fullPath):
     if(mDict.__contains__(pathInTar)):
         backupFile = mDict[pathInTar]
 
-        DEBUG >= 2 and print ("This file has been backed up before:", pathInTar, " manifestData:", manifestData)
+        DEBUG >= 2 and print ("This file has been backed up before:", pathInTar, " manifestData:", backupFile)
 
         # IF File was modified                   or  User ID changed                 or  Group ID changed
         if (int(fileModTime) > backupFile.modificationSinceEpoch) or (fileUID != backupFile.UID) or (fileGID != backupFile.GID):
