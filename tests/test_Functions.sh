@@ -72,7 +72,7 @@ function restoreAndCheck ()
     cd $TMPDIR/restored/
     rm -rf $TMPDIR/restored/*
 
-    zbackup restore --silent $TMPDIR/zbackup/backups/$BACKUPNAME.manifest > /tmp/$BACKUPNAME.manifest
+    zbackup restore --non-encrypted --silent $TMPDIR/zbackup/backups/$BACKUPNAME.manifest > /tmp/$BACKUPNAME.manifest
     zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/$BACKUPNAME
     checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore $VERBOSITY failed" $LOCAL_TODO_BUG
 

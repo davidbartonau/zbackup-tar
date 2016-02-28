@@ -597,6 +597,8 @@ def handleBackupCreation(pArgs):
     """
     global iPath, mDict, dPath, excludes, nBackup, refreshCycles, DEBUG
     
+    fixPArgs(pArgs)
+
     DEBUG >= 1 and print ("handleBackupCreation:", pArgs)
 
     if not hBCreationChecks(pArgs):
@@ -650,6 +652,8 @@ Return -> 0/Relevant error code
 """    
 def handleBackupRestoration(pArgs):   
     global DEBUG
+
+    fixPArgs(pArgs)
 
     DEBUG >= 1 and print ("handleBackupRestoration:", pArgs)
 
@@ -798,6 +802,21 @@ def hBRestorationChecks(pArgs):
 
 
 """
+Adds password file or non-encrypted to aFlags
+"""
+def fixPArgs(pArgs):
+    if pArgs.passwordFile:
+        encryptionArgs = ['--password-file', pArgs.passwordFile[0]]
+    else:
+        encryptionArgs = ['--non-encrypted']
+
+    if not pArgs.aFlags:
+        pArgs.aFlags = encryptionArgs
+    else:
+        pArgs.aFlags += encryptionArgs
+
+
+"""
 A function used to get a command line argument parser which will be used while creating a new backup
 """
 def getCreateArgsParser():
@@ -814,6 +833,9 @@ def getCreateArgsParser():
     
     parser.add_argument('--zbackupArgs', dest = 'aFlags', metavar = 'AF', nargs = '*',
         help = 'Additional flags to create a new backup')    
+    
+    parser.add_argument('--password-file', dest = 'passwordFile', nargs = 1,
+        help = 'Additional zbackup encryption file')    
     
     parser.add_argument('--exclude', dest = 'excludes', action = 'append', metavar = 'EFiles',  
         help = 'Files to be excluded from the backup')
@@ -846,6 +868,9 @@ def getRestoreArgsParser():
     
     parser.add_argument('--zbackupArgs', dest = 'aFlags', metavar = 'AF', type = str, nargs = '*',
         help = 'Additional flags to create a new backup')
+    
+    parser.add_argument('--password-file', dest = 'passwordFile', nargs = 1,
+        help = 'Additional zbackup encryption file')    
     
     parser.add_argument('--verbosity', dest = 'verbosity', metavar = 'VERBOSITY', type = int,
         help = 'Debug output: reasonable values are 1, 2')   

@@ -32,13 +32,13 @@ function test1Encrypted ()
 
     zbackup init --password-file $TMPDIR/password $TMPDIR/zbackup_encrypted/
 
-    zbackup-tar create $VERBOSITY --zbackupArgs "--password-file $TMPDIR/password" --previousBackup "" --newBackup $TMPDIR/zbackup_encrypted/backups/backup01.tar $TESTDATA/
+    zbackup-tar create $VERBOSITY --password-file $TMPDIR/password --previousBackup "" --newBackup $TMPDIR/zbackup_encrypted/backups/backup01.tar $TESTDATA/
     checkForSuccess "SUCCESS $BACKUPNAME backed up" "FAIL zbackup-tar failed"
 
     cd $TMPDIR/restored/
     rm -rf $TMPDIR/restored/*
 
-    zbackup-tar restore $VERBOSITY --zbackupArgs "--password-file $TMPDIR/password" --backup $TMPDIR/zbackup_encrypted/backups/backup01.tar
+    zbackup-tar restore $VERBOSITY --password-file $TMPDIR/password --backup $TMPDIR/zbackup_encrypted/backups/backup01.tar
     checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore $VERBOSITY failed"
 
     diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
@@ -209,7 +209,7 @@ function test9 ()
     cd $TMPDIR/restored/
     zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
 
-    zbackup restore --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
+    zbackup restore --non-encrypted --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
     echo Checking backup $BACKUP
     diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
@@ -245,7 +245,7 @@ function test9b ()
     cd $TMPDIR/restored/
     zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
 
-    zbackup restore --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
+    zbackup restore --non-encrypted --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
     echo Checking backup $BACKUP
     diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
@@ -278,7 +278,7 @@ function test10 ()
     cd $TMPDIR/restored/
     zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar
 
-    zbackup restore --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
+    zbackup restore --non-encrypted --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
     echo Checking backup $BACKUP
     diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/ > /tmp/backup$BACKUP.diff

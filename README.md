@@ -67,6 +67,19 @@ cd /place/to/restore
 zbackup-tar restore --backup /var/backups/zbackup/backups/bigfiles4.tar folder1/
 ````
 
+## Encryption and additional zbackup parameters
+Encrypted zbackup stores are specified using --password-file
+````
+# Use the encryption key file /root/my.key
+zbackup-tar restore --password-file /root/my.key --backup /var/backups/zbackup/backups/bigfiles4.tar folder1/
+````
+
+Additional parameters can be passed to zbackup in raw form using --zbackupArgs, with a single argument
+````
+# Pass a b c as 3 arguments to zbackup
+zbackup-tar restore --zbackupArgs "a b c" /root/my.key --backup /var/backups/zbackup/backups/bigfiles4.tar folder1/
+````
+
 ## Advanced considerations
 ### Summary
 It is useful to freshen our files at regular intervals (because zbackup deduplicates, this has no storage cost).  For example, if we want to ensure that our files are within the last 48 backups, we do the following:
