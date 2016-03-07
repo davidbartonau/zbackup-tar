@@ -67,6 +67,13 @@ cd /place/to/restore
 zbackup-tar restore --backup /var/backups/zbackup/backups/bigfiles4.tar folder1/
 ````
 
+## zbackup-tar Parameters
+zbackup-tar supports additional parameters as listed below:
+- --exclude  Backing up only. Pass in a list of glob patterns of files to exclude from the backup.
+- --refreshCycles Backing up only. A number used to ensure files are refreshed in the tar file at least ever N backup cycles.  See Advanced considerations
+- --verbosity Backing up & restoring.  A number like 1 or 2 used to make zbackup-tar log more information
+- --zbackupArgs Backing up & restoring.  Used to pass additional parameters to zbackup, see Encryption and additional zbackup parameters
+
 ## Encryption and additional zbackup parameters
 Encrypted zbackup stores are specified using --password-file
 ````
