@@ -78,7 +78,7 @@ function restoreAndCheck ()
 
     echo Checking $BACKUPNAME
 
-    diff -rq  --no-dereference $TESTDATA/ $TMPDIR/restored/
+    diff -rq  $DIFF_DEREFERENCE $TESTDATA/ $TMPDIR/restored/
     checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME" $LOCAL_TODO_BUG
 }
 

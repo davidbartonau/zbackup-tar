@@ -13,9 +13,15 @@ export TESTDATA=$1
 REFRESHCYCLES=5
 TODO_BUG=1
 #export VERBOSITY="--verbosity 1"
+#export  DIFF_NO_DEREFERENCE=1
 
 source $FUNCTIONROOT/test_Functions.sh
 
+if [ -z "$DIFF_NO_DEREFERENCE" ]; then
+    export DIFF_DEREFERENCE="--no-dereference"
+else
+    export DIFF_DEREFERENCE=""
+fi
 
 function test1 ()
 {
@@ -41,7 +47,7 @@ function test1Encrypted ()
     zbackup-tar restore $VERBOSITY --password-file $TMPDIR/password --backup $TMPDIR/zbackup_encrypted/backups/backup01.tar
     checkForSuccess "SUCCESS $BACKUPNAME restored" "FAIL zbackup-tar restore $VERBOSITY failed"
 
-    diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
+    diff -rq $DIFF_DEREFERENCE $TESTDATA/ $TMPDIR/restored/
     checkForSuccess "SUCCESS $BACKUPNAME is the same" "FAIL Restoring $BACKUPNAME"
 }
 
@@ -212,13 +218,13 @@ function test9 ()
     zbackup restore --non-encrypted --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
     echo Checking backup $BACKUP
-    diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
+    diff -rq $DIFF_DEREFERENCE $TESTDATA/ $TMPDIR/restored/
 
     checkForFailure "FAIL txt files should be different" "SUCCESS backup $BACKUP is different"
 
     find $TESTDATA/ -name "*.txt" -print0 | xargs -0 rm -v
 
-    diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
+    diff -rq $DIFF_DEREFERENCE $TESTDATA/ $TMPDIR/restored/
 
     checkForSuccess "SUCCESS After removing txt files, backup should be the same" "FAIL backup files were different" 
 
@@ -248,7 +254,7 @@ function test9b ()
     zbackup restore --non-encrypted --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
     echo Checking backup $BACKUP
-    diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
+    diff -rq $DIFF_DEREFERENCE $TESTDATA/ $TMPDIR/restored/
 
     checkForFailure "FAIL txt files should be different" "SUCCESS backup $BACKUP is different"
 
@@ -256,7 +262,7 @@ function test9b ()
     find $TESTDATA/ -name "*.exclude" -print0 | xargs -0 rm -v
     find $TESTDATA/ -name "excludedir" -print0 | xargs -0 rm -rfv
 
-    diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/
+    diff -rq $DIFF_DEREFERENCE $TESTDATA/ $TMPDIR/restored/
 
     checkForSuccess "SUCCESS After removing txt and ,v and subdir1/, backup should be the same" "FAIL backup files were different" 
 
@@ -281,7 +287,7 @@ function test10 ()
     zbackup restore --non-encrypted --silent $TMPDIR/zbackup/backups/backup$BACKUP.tar.manifest > /tmp/backup$BACKUP.tar.manifest
 
     echo Checking backup $BACKUP
-    diff -rq --no-dereference $TESTDATA/ $TMPDIR/restored/ > /tmp/backup$BACKUP.diff
+    diff -rq $DIFF_DEREFERENCE $TESTDATA/ $TMPDIR/restored/ > /tmp/backup$BACKUP.diff
 
     checkForFailure "FAIL txt files should be different" "SUCCESS backup $BACKUP is different"
 
@@ -373,7 +379,7 @@ function test14 ()
     rm -rf $TMPDIR/restored/*
     zbackup-tar restore $VERBOSITY --backup $TMPDIR/zbackup/backups/backup$BACKUP.tar folder1/
 
-    diff -rq --no-dereference $TESTDATA/folder1/ $TMPDIR/restored/folder1/
+    diff -rq $DIFF_DEREFERENCE $TESTDATA/folder1/ $TMPDIR/restored/folder1/
 
     checkForSuccess "SUCCESS - folder1 is the same" "FAILURE folder1 is different"
 
@@ -414,7 +420,13 @@ function test16 ()
     logResult "######## Test 16 - links (broken and working) ########"
     export BACKUP=16
 
-    ln -sT /dev/broken $TESTDATA/broken.link
+    if [ -z "$DIFF_NO_DEREFERENCE" ]; then
+        ln -sT /dev/broken $TESTDATA/broken.link
+    else
+        echo Skipping broken link test, old version of diff
+        rm -v $TESTDATA/broken.link
+    fi
+
     ln -sT /etc/init.d $TESTDATA/initd.link
 
     backupAndRestoreDir backup15.tar backup$BACKUP.tar
