@@ -115,26 +115,28 @@ The manifest has the same name as the tar file with .manifest on the end.  so fo
 
 Each manifest contains the list of all files.  For each file we record the last modified date, the last backup date, and the tar file containing the file.  The tar file contains just the changed files.
 
+### Manifest File Format
 The example manifest below has two files, contained in two different tar files.  The tar files are relative to the zbackup root.
 ````
-<?xml version="1.0" ?>
-<info>
-  <bDir>testdata/</bDir>
-  <fDesc>
-    <name>document.odt</name>
-    <size>31365</size>
-    <modOn>2014-12-24T12:23:34</modOn>
-    <backupOn>2014-12-30T11:25:02</backupOn>
-    <path>backups/backup16.tar</path>
-  </fDesc>
-  <fDesc>
-    <name>folder1/subfolder1/1.jpg</name>
-    <size>373835</size>
-    <modOn>2014-12-24T12:23:34</modOn>
-    <backupOn>2014-12-30T11:22:54</backupOn>
-    <path>backups/backup11.tar</path>
-  </fDesc>
+HEADER,1,573
+./Admin/Directors Meetings,4096,1287648212,1456913600,backups/2016-03/02/18_13/david_1iT.tar,1000,1000,0
+./Admin/Directors Meetings/20000410Agenda.doc,19456,1101024335,1456816395,backups/2016-03/01/15_13/david_1iT.tar,1000,1000,1
+./Admin/Directors Meetings/20000410Appendum.doc,20480,1101024335,1456902794,backups/2016-03/02/15_13/david_1iT.tar,1000,1000,1
 ````
+
+The first row of the CSV is the header.  It contains the word HEADER, the format version number (currently only 1), and the number of backups in this sequence.  Remembering that every backup in zbackup-tar is based on a previous backup manifest, this tells you how far back to go.
+
+After this, each row is an entry in the tarfile, or a previous tarfile.  The format of each row is:
+- File name
+- Size in bytes
+- Modification time since epoch in seconds [1]
+- Last Backup time since epoch in seconds
+- Path to the tarfile stored in this zbackup repository, relative to the repository root
+- UID of the file owner [1]
+- GID of the file group [1]
+- 1 if this is a file, 0 if it is a directory
+
+[1] These values are stored to rapidly determine if a file changes between backups, tar is still used to restore the actual values.
 
 ## Running the unit test
 The file test/test.sh runs a set of unit tests to ensure that the backup system works properly.  It is also a good example of how to use the tool.
