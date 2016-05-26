@@ -418,7 +418,13 @@ def createZBackup(absPath, aFlags):
             for backupCycle, nameInTar in filesToBackup:
                 fullFile = mDict[nameInTar].fullFileName
                 DEBUG and print ("Adding file cycle:", backupCycle, " file:", fullFile, " as ", nameInTar, " cycle:", backupCycle)
-                tar.add (name = fullFile, arcname = nameInTar, recursive = False)
+
+                try:
+                    tar.add (name = fullFile, arcname = nameInTar, recursive = False)
+
+                except FileNotFoundError as e:
+                    del mDict[nameInTar]
+                    print ("File vanished during backup:", fullFile)
 
             tar.close ()
 
@@ -930,4 +936,5 @@ def main():
 if __name__ == "__main__":
     
     main()
+
 
