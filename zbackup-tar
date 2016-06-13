@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # The MIT License (MIT)
 #
-# Copyright (c) 2014 OneIT
+# Copyright (c) 2016 OneIT
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,6 +29,7 @@ dPath -> Directory path to be backed up
 nBackup -> Path of the new backup 
 iPath -> Absolute path of "info" file within the zbackup directory structure
 """
+versionNumber = "2016-05-26" 
 
 dPath = "" 
 nBackup = ""
@@ -896,7 +897,6 @@ def main():
     DEBUG >= 1 and print ("Debug level:", DEBUG)
 
     if len(sys.argv) > 1:
-    
         if sys.argv[1] == 'create':
             
             retCode = handleBackupCreation(cParser.parse_args())
@@ -917,8 +917,12 @@ def main():
             if retCode != 0:
                 raise Exception(retCode)            
             
+        elif sys.argv[1] == '--version':
+            print('Version ' + versionNumber)            
+            
         elif sys.argv[1] == '-h' or sys.argv[1] == '--help':
             
+            print('zbackup-tar Version ' + versionNumber)            
             cParser.print_help()
             rParser.print_help()            
             
