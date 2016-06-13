@@ -29,7 +29,7 @@ dPath -> Directory path to be backed up
 nBackup -> Path of the new backup 
 iPath -> Absolute path of "info" file within the zbackup directory structure
 """
-versionNumber = "2016-05-26" 
+versionNumber = "2016-06-13" 
 
 dPath = "" 
 nBackup = ""
@@ -239,7 +239,7 @@ def getCSVManifestFromDict(mDict):
     sDict = OrderedDict(sorted(mDict.items()))
 
     sIO = io.StringIO()
-    csvWriter = csv.writer(sIO, dialect = 'unix', quoting = csv.QUOTE_MINIMAL)
+    csvWriter = csv.writer(sIO, dialect = 'unix', quoting = csv.QUOTE_NONNUMERIC)
 
     data = []
     data.append (["HEADER", 1, currentCycle])
