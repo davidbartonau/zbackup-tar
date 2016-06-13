@@ -11,7 +11,9 @@ export FUNCTIONROOT=`dirname $SCRIPTNAME`
 export TMPDIR=/tmp/zbackup-tar/
 export TESTDATA=$1
 REFRESHCYCLES=5
-TODO_BUG=1
+
+# Set to 1 to stop on errors
+TODO_BUG=0
 #export VERBOSITY="--verbosity 1"
 
 source $FUNCTIONROOT/test_Functions.sh
